@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Canción actual</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Onest:wght@500;600&display=swap">
+  <style>
+    html, body { margin: 0; background: transparent; overflow: hidden; }
+    .card {
+      position: fixed; left: 24px; bottom: 24px; width: min(520px, calc(100vw - 48px));
+      background: rgba(23, 17, 42, .88); border: 2px solid #ffb547; border-radius: 18px; color: #f4efff;
+      font-family: Onest, system-ui, sans-serif; overflow: hidden;
+      transition: transform .4s cubic-bezier(.2, 1.2, .4, 1), opacity .3s;
+    }
+    .card.hide { transform: translateY(30px); opacity: 0; }
+    .now { display: grid; grid-template-columns: 72px 1fr; gap: 14px; padding: 14px; align-items: center; }
+    .now img { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; }
+    .title { font: 800 22px/1.15 'Bricolage Grotesque', system-ui, sans-serif; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .who { font-size: 14px; color: #a99fcb; margin-top: 4px; }
+    .who b { color: #ffb547; font-weight: 600; }
+    .next { border-top: 1px solid #3a2f66; padding: 8px 14px 10px; font-size: 14px; color: #a99fcb; }
+    .next ol { margin: 4px 0 0; padding-left: 20px; }
+    .next li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f4efff; }
+    .hint { padding: 0 14px 12px; font-size: 14px; color: #a99fcb; }
+    .bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; margin-right: 6px; }
+    .bars i { width: 3px; background: #ffb547; animation: eq .9s ease-in-out infinite; }
+    .bars i:nth-child(2) { animation-delay: .2s; } .bars i:nth-child(3) { animation-delay: .4s; }
+    @keyframes eq { 0%, 100% { height: 3px; } 50% { height: 12px; } }
+    @media (prefers-reduced-motion: reduce) { .bars i { animation: none; height: 8px; } }
+  </style>
+</head>
+<body>
+  <div class="card hide" id="card" aria-live="polite"></div>
+  <script src="/overlay.js"></script>
+  <script>
+    let command = '!sr';
+    const card = document.getElementById('card');
+    const esc = (s) => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
+
+    function render(st) {
+      const c = st.current;
+      const upcoming = st.queue.filter((s) => s.status === 'queued').slice(0, 3);
+      if (!c) {
+        card.classList.add('hide');
+        return;
+      }
+      card.innerHTML = `
+        <div class="now">
+          <img src="https://i.ytimg.com/vi/${esc(c.videoId)}/mqdefault.jpg" alt="">
+          <div>
+            <div class="title">${esc(c.title)}</div>
+            <div class="who">${st.paused ? '⏸ En pausa' : '<span class="bars"><i></i><i></i><i></i></span>Sonando'} · pedida por <b>${esc(c.requestedBy.name)}</b></div>
+          </div>
+        </div>
+        ${upcoming.length ? `<div class="next">Siguen<ol>${upcoming.map((s) => `<li>${esc(s.title)}</li>`).join('')}</ol></div>` : ''}
+        <div class="hint">Pide tu canción con <b>${esc(command)}</b></div>`;
+      card.classList.remove('hide');
+    }
+
+    overlayConnect('songs', (msg) => {
+      if (msg.type === 'hello' || msg.type === 'config') {
+        command = msg.songsCommand || command;
+        overlayBranding(msg.branding, msg.appName);
+      } else if (msg.type === 'songs:state') render(msg);
+    });
+  </script>
+</body>
+</html>

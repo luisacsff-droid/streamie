@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamie · Alertas, voz y canciones para tu TikTok LIVE</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 48px 20px 64px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 56px; align-items: start; }
+    .brand { font: 800 20px var(--display); display: flex; align-items: center; gap: 8px; margin-bottom: 56px; }
+    .brand svg { width: 26px; height: 26px; }
+    .hero h1 { font-size: clamp(2.4rem, 5.5vw, 4rem); font-weight: 800; letter-spacing: -0.02em; max-width: 13ch; }
+    .hero > p { font-size: 18px; color: var(--muted); margin-top: 18px; max-width: 46ch; }
+    .demo { margin-top: 36px; display: grid; gap: 10px; max-width: 440px; }
+    .demo div {
+      display: flex; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 12px 14px; font-weight: 500;
+    }
+    .demo b { font-family: var(--display); }
+    .demo i { font-style: normal; font-size: 22px; width: 28px; text-align: center; }
+    .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 40px; max-width: 560px; }
+    .plan { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; }
+    .plan.pro { border-color: var(--spark); }
+    .plan h3 { font-size: 20px; margin-bottom: 8px; }
+    .plan ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+    .plan li + li { margin-top: 4px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 28px; position: sticky; top: 24px; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 22px; background: var(--night); padding: 4px; border-radius: 999px; }
+    .tabs button { flex: 1; border: 0; background: transparent; justify-content: center; }
+    .tabs button[aria-selected='true'] { background: var(--panel-2); }
+    form { display: grid; gap: 14px; }
+    form label span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    form .primary { justify-content: center; padding: 12px; font-size: 15px; }
+    .error { color: var(--err); font-size: 14px; min-height: 1.2em; }
+    @media (max-width: 860px) {
+      .wrap { grid-template-columns: 1fr; gap: 36px; padding-top: 28px; }
+      .brand { margin-bottom: 32px; }
+      .card { position: static; }
+      .plans { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffb547" d="M12 1l2.6 7.4L22 11l-7.4 2.6L12 21l-2.6-7.4L2 11l7.4-2.6z"/></svg>
+        <span class="app-name">Streamie</span>
+      </div>
+      <h1>Tu LIVE de TikTok, con alertas, voz y canciones.</h1>
+      <p>Escribe tu usuario de TikTok, pega un link en OBS o LIVE Studio y listo: cada regalo, follow y mensaje cobra vida en tu stream.</p>
+
+      <div class="demo" aria-label="Ejemplos de lo que verá tu stream">
+        <div><i>🌹</i><span><b>sofi.dance</b> envió 5x Rosa</span></div>
+        <div><i>🗣️</i><span>“el_profe_mx dice: ¡saludos desde Monterrey!”</span></div>
+        <div><i>🎵</i><span><b>carlitos99</b> pidió una canción con !sr</span></div>
+      </div>
+
+      <div class="plans">
+        <div class="plan">
+          <h3>Free</h3>
+          <ul>
+            <li>Alertas de regalos, follows y shares</li>
+            <li>Lectura del chat con la voz de tu navegador</li>
+            <li>Cola de 5 canciones con tu aprobación</li>
+            <li>20 horas de LIVE al mes</li>
+          </ul>
+        </div>
+        <div class="plan pro">
+          <h3>Pro</h3>
+          <ul>
+            <li>Voces naturales en español</li>
+            <li>Textos, sonidos e imágenes propios en alertas</li>
+            <li>Regalos que adelantan canciones</li>
+            <li>Cola de 50 canciones y sin marca en overlays</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Acceso">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-mode="register">Crear cuenta</button>
+        <button role="tab" aria-selected="false" data-mode="login">Entrar</button>
+      </div>
+      <form id="auth" novalidate>
+        <label><span>Correo</span><input type="email" name="email" autocomplete="email" required></label>
+        <label><span>Contraseña</span><input type="password" name="password" autocomplete="new-password" minlength="8" required></label>
+        <p class="error" id="error" role="alert"></p>
+        <button class="primary" type="submit" id="submit">Crear cuenta gratis</button>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    let mode = 'register';
+    const form = document.getElementById('auth');
+    const submit = document.getElementById('submit');
+    const error = document.getElementById('error');
+
+    fetch('/api/me').then((r) => { if (r.ok) location.href = '/app'; });
+
+    document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+      mode = b.dataset.mode;
+      document.querySelectorAll('[data-mode]').forEach((x) => x.setAttribute('aria-selected', x === b));
+      submit.textContent = mode === 'register' ? 'Crear cuenta gratis' : 'Entrar';
+      form.password.autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+      error.textContent = '';
+    }));
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      error.textContent = '';
+      submit.disabled = true;
+      try {
+        const res = await fetch('/api/' + mode, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: form.email.value, password: form.password.value }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo continuar.');
+        location.href = '/app';
+      } catch (err) {
+        error.textContent = err.message;
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

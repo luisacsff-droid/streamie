@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel · Streamie</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffb547" d="M12 1l2.6 7.4L22 11l-7.4 2.6L12 21l-2.6-7.4L2 11l7.4-2.6z"/></svg>
+      <span id="appName">Streamie</span>
+    </div>
+    <div class="top-right">
+      <div class="usage" title="Horas de conexión al LIVE este mes">
+        <span id="usageText" class="small muted"></span>
+        <div class="bar"><i id="usageBar"></i></div>
+      </div>
+      <span id="planPill" class="plan-pill"></span>
+      <button id="upgradeBtn" class="primary sm" hidden>Pasar a Pro</button>
+      <button id="portalBtn" class="ghost sm" hidden>Mi suscripción</button>
+      <button id="logoutBtn" class="ghost sm">Salir</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="connect" aria-labelledby="connectTitle">
+      <h1 id="connectTitle" class="sr-only">Conexión al LIVE</h1>
+      <form id="connectForm" class="connect-form">
+        <label class="handle">
+          <span class="at">@</span>
+          <input id="username" name="username" placeholder="tu_usuario_de_tiktok" autocomplete="off" spellcheck="false" aria-label="Usuario de TikTok">
+        </label>
+        <button id="connectBtn" class="primary" type="submit">Conectar</button>
+        <button id="disconnectBtn" class="ghost" type="button" hidden>Desconectar</button>
+      </form>
+      <p class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Desconectado</span><span id="viewers" class="muted"></span></p>
+      <p id="warn" class="warn small" hidden></p>
+    </section>
+
+    <section class="settings" aria-label="Configuración">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="overlays" aria-selected="true">Overlays</button>
+        <button role="tab" data-tab="alerts" aria-selected="false">Alertas</button>
+        <button role="tab" data-tab="tts" aria-selected="false">Voz</button>
+        <button role="tab" data-tab="songs" aria-selected="false">Canciones</button>
+      </nav>
+
+      <div class="tab-panel" data-panel="overlays">
+        <p class="muted intro">Pega cada link como <b>fuente de navegador</b> en OBS, Streamlabs o TikTok LIVE Studio (1920×1080).</p>
+        <div class="overlay-row">
+          <div>
+            <h3>Alertas</h3>
+            <p class="small muted">Animaciones de regalos, follows y shares. Fondo transparente.</p>
+          </div>
+          <div class="copy"><input readonly id="urlAlerts" aria-label="Link del overlay de alertas"><button data-copy="urlAlerts" class="sm">Copiar</button></div>
+        </div>
+        <div class="overlay-row">
+          <div>
+            <h3>Reproductor de audio</h3>
+            <p class="small muted">Lee el chat y reproduce las canciones. Ábrelo en Chrome o agrégalo a OBS con “Controlar audio desde OBS”. Usa solo uno a la vez.</p>
+          </div>
+          <div class="copy"><input readonly id="urlPlayer" aria-label="Link del reproductor"><button data-copy="urlPlayer" class="sm">Copiar</button><a id="openPlayer" class="btn sm ghost" target="_blank" rel="noopener">Abrir</a></div>
+        </div>
+        <div class="overlay-row">
+          <div>
+            <h3>Canción actual</h3>
+            <p class="small muted">Muestra qué suena y lo que sigue en la cola.</p>
+          </div>
+          <div class="copy"><input readonly id="urlSongs" aria-label="Link del overlay de canciones"><button data-copy="urlSongs" class="sm">Copiar</button></div>
+        </div>
+        <p class="small muted rotate">¿Alguien más tiene tus links? <button id="rotateBtn" class="ghost sm danger">Generar links nuevos</button></p>
+      </div>
+      <div class="tab-panel" data-panel="alerts" hidden><div class="fields" data-section="alerts"></div></div>
+      <div class="tab-panel" data-panel="tts" hidden><div class="fields" data-section="tts"></div></div>
+      <div class="tab-panel" data-panel="songs" hidden><div class="fields" data-section="songs"></div></div>
+    </section>
+
+    <aside class="side">
+      <section class="box" aria-labelledby="testTitle">
+        <h2 id="testTitle">Probar sin estar en vivo</h2>
+        <p class="small muted">Manda eventos falsos a tus overlays para ver cómo se ven.</p>
+        <div class="test-buttons">
+          <button data-test="gift" class="sm">🎁 Regalo</button>
+          <button data-test="follow" class="sm">➕ Follow</button>
+          <button data-test="share" class="sm">↗ Compartir</button>
+        </div>
+        <form id="chatTest" class="chat-test">
+          <input name="user" placeholder="usuario" aria-label="Usuario de prueba" value="viewer_prueba">
+          <input name="comment" placeholder="Mensaje o !sr canción" aria-label="Mensaje de prueba" required>
+          <button class="sm" type="submit">Enviar</button>
+        </form>
+      </section>
+
+      <section class="box" aria-labelledby="queueTitle">
+        <div class="box-head">
+          <h2 id="queueTitle">Canciones</h2>
+          <div class="queue-actions">
+            <button id="pauseBtn" class="sm ghost">Pausar</button>
+            <button id="skipBtn" class="sm ghost">Saltar</button>
+            <button id="clearBtn" class="sm ghost danger">Vaciar</button>
+          </div>
+        </div>
+        <div id="nowPlaying" class="now"></div>
+        <ol id="queue" class="queue"></ol>
+      </section>
+
+      <section class="box" aria-labelledby="logTitle">
+        <h2 id="logTitle">Actividad</h2>
+        <ul id="log" class="log"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <script src="/dashboard.js"></script>
+</body>
+</html>

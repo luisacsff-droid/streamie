@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Alertas</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Onest:wght@600&display=swap">
+  <style>
+    html, body { margin: 0; background: transparent; overflow: hidden; height: 100vh; }
+    #stage { position: fixed; left: 0; right: 0; top: 12vh; display: flex; justify-content: center; }
+    .alert {
+      display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+      max-width: 80vw; animation: pop .5s cubic-bezier(.2, 1.4, .4, 1) both;
+    }
+    .alert.out { animation: fade .4s ease-in forwards; }
+    .media { position: relative; width: 170px; height: 170px; display: grid; place-items: center; }
+    .media img { max-width: 100%; max-height: 100%; object-fit: contain; position: relative; z-index: 1; }
+    .media .avatar { width: 128px; height: 128px; border-radius: 50%; border: 5px solid #ffb547; object-fit: cover; }
+    .media .glyph { font-size: 110px; position: relative; z-index: 1; filter: drop-shadow(0 6px 16px rgba(0,0,0,.5)); }
+    .rays { position: absolute; inset: -40px; z-index: 0; animation: spin 6s linear infinite; }
+    .text {
+      font: 800 clamp(34px, 4.4vw, 64px)/1.05 'Bricolage Grotesque', system-ui, sans-serif;
+      color: #fff; letter-spacing: -0.01em;
+      -webkit-text-stroke: 2px #2a1a00; paint-order: stroke fill;
+      text-shadow: 0 4px 0 #2a1a00, 0 10px 30px rgba(0,0,0,.45);
+    }
+    .text .who { color: #ffb547; }
+    .sub { font: 600 22px Onest, system-ui, sans-serif; color: #fff; text-shadow: 0 2px 6px #000; }
+    @keyframes pop { from { transform: scale(.4) translateY(30px); opacity: 0; } }
+    @keyframes fade { to { transform: translateY(-20px); opacity: 0; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #msg { position: fixed; inset: 0; display: none; place-items: center; font: 600 24px Onest, sans-serif; color: #fff; background: rgba(23,17,42,.85); }
+  </style>
+</head>
+<body>
+  <div id="stage" aria-live="polite"></div>
+  <div id="msg"></div>
+  <script src="/overlay.js"></script>
+  <script>
+    const queue = [];
+    let busy = false;
+    let volume = 0.8;
+    const stage = document.getElementById('stage');
+    const GLYPH = { follow: '💜', share: '🔁', gift: '🎁' };
+    const RAYS = `<svg class="rays" viewBox="0 0 100 100" aria-hidden="true">${Array.from({ length: 12 }, (_, i) =>
+      `<path d="M50 50 L${50 + 60 * Math.cos((i * 30 - 4) * Math.PI / 180)} ${50 + 60 * Math.sin((i * 30 - 4) * Math.PI / 180)} L${50 + 60 * Math.cos((i * 30 + 4) * Math.PI / 180)} ${50 + 60 * Math.sin((i * 30 + 4) * Math.PI / 180)}Z" fill="#ffb547" opacity=".35"/>`).join('')}</svg>`;
+
+    // Sonido por defecto generado en el navegador (sin archivos).
+    let ctx;
+    function chime(vol) {
+      try {
+        ctx = ctx || new AudioContext();
+        const now = ctx.currentTime;
+        [880, 1318.5, 1760].forEach((f, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'triangle';
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0, now + i * 0.09);
+          g.gain.linearRampToValueAtTime(0.25 * vol, now + i * 0.09 + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.6);
+          o.connect(g).connect(ctx.destination);
+          o.start(now + i * 0.09);
+          o.stop(now + i * 0.09 + 0.7);
+        });
+      } catch {}
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+    function show(a) {
+      busy = true;
+      const el = document.createElement('div');
+      el.className = 'alert';
+      let media;
+      if (a.imageUrl) media = `<img src="${esc(a.imageUrl)}" alt="">`;
+      else if (a.kind === 'gift' && a.gift?.image) media = `<img src="${esc(a.gift.image)}" alt="">`;
+      else if (a.user?.avatar) media = `<img class="avatar" src="${esc(a.user.avatar)}" alt="">`;
+      else media = `<span class="glyph">${GLYPH[a.kind] || '✨'}</span>`;
+
+      // Resalta el nombre del usuario dentro del texto.
+      let text = esc(a.text);
+      const name = esc(a.user?.name);
+      if (name && text.includes(name)) text = text.replace(name, `<span class="who">${name}</span>`);
+      const sub = a.kind === 'gift' && a.gift?.diamonds ? `<div class="sub">💎 ${a.gift.diamonds * a.gift.count}</div>` : '';
+      el.innerHTML = `<div class="media">${RAYS}${media}</div><div class="text">${text}</div>${sub}`;
+      stage.replaceChildren(el);
+
+      const vol = a.volume ?? volume;
+      if (a.soundUrl) {
+        const s = new Audio(a.soundUrl);
+        s.volume = vol;
+        s.play().catch(() => chime(vol));
+      } else if (vol > 0) {
+        chime(vol);
+      }
+
+      setTimeout(() => el.classList.add('out'), a.durationSec * 1000);
+      setTimeout(() => { el.remove(); busy = false; next(); }, a.durationSec * 1000 + 450);
+    }
+    function next() { if (!busy && queue.length) show(queue.shift()); }
+
+    overlayConnect('alerts', (msg) => {
+      if (msg.type === 'hello' || msg.type === 'config') {
+        volume = msg.alertsVolume;
+        overlayBranding(msg.branding, msg.appName);
+      } else if (msg.type === 'alert') {
+        if (queue.length < 30) queue.push(msg);
+        next();
+      } else if (msg.type === 'invalid-key') {
+        const m = document.getElementById('msg');
+        m.style.display = 'grid';
+        m.textContent = 'Este link ya no es válido. Copia el nuevo desde tu panel.';
+      }
+    });
+  </script>
+</body>
+</html>

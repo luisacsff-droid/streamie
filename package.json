@@ -1,0 +1,22 @@
+{
+  "name": "streamie",
+  "version": "0.1.0",
+  "description": "Alertas, TTS y song request para TikTok LIVE",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "set-plan": "node scripts/set-plan.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.3.0",
+    "tiktok-live-connector": "^2.5.0",
+    "ws": "^8.22.0"
+  },
+  "engines": {
+    "node": ">=20.12"
+  }
+}
