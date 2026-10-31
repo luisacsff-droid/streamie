@@ -26,8 +26,16 @@ function log(userId, entry) {
   hub.send(userId, { type: 'log', entry: { at: Date.now(), ...entry } }, ['dashboard']);
 }
 
+const lastNoPlayerWarn = new Map();
 async function speak(user, text) {
-  if (!hub.count(user.id, 'player')) return; // nadie escuchando: no gastes en TTS
+  if (!hub.count(user.id, 'player')) {
+    // Nadie escuchando: no gastes en TTS, pero avisa en el panel (máx. 1 vez por minuto).
+    if (Date.now() - (lastNoPlayerWarn.get(user.id) || 0) > 60_000) {
+      lastNoPlayerWarn.set(user.id, Date.now());
+      log(user.id, { kind: 'system', text: 'Hay voz por leer, pero el Reproductor no está abierto. Ábrelo y dale “Activar audio”.' });
+    }
+    return;
+  }
   const msg = await tts.buildTts(text, user.settings);
   hub.send(user.id, msg, ['player']);
 }
@@ -41,7 +49,7 @@ async function handleEvent(userId, event) {
     if (event.kind === 'chat') {
       log(userId, { kind: 'chat', text: `${event.user.name}: ${event.comment}` });
       const cmd = user.settings.songs.command.toLowerCase();
-      const comment = String(event.comment || '').trim();
+      const comment = tts.normalizeCommand(event.comment);
       if (comment.toLowerCase() === cmd || comment.toLowerCase().startsWith(cmd + ' ')) {
         const result = await songs.request(user, event, comment.slice(cmd.length).trim());
         if (result) log(userId, { kind: 'song', text: result });

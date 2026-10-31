@@ -90,7 +90,7 @@
     songs: [
       { group: 'Pedidos' },
       { path: 'songs.enabled', type: 'switch', label: 'Aceptar canciones del chat' },
-      { path: 'songs.command', type: 'text', label: 'Comando', hint: () => (me.features.youtubeSearch ? 'Ej: !sr bad bunny monaco' : 'Por ahora solo con link de YouTube. Ej: !sr https://youtu.be/…') },
+      { path: 'songs.command', type: 'text', label: 'Comando', hint: () => (me.features.youtubeSearch ? 'Ej: !sr bad bunny monaco' : 'Falta configurar YOUTUBE_API_KEY: sin ella solo funcionan links, y TikTok no deja mandar links en el chat.') },
       { path: 'songs.requireApproval', type: 'switch', label: 'Aprobar cada canción antes de que suene', lock: (p) => p.songs.forceApproval, lockText: 'Siempre activo en Free' },
       { path: 'songs.maxQueue', type: 'number', min: 1, max: (p) => p.songs.maxQueue, label: 'Canciones máximas en cola', hint: (p) => `Tu plan permite hasta ${p.songs.maxQueue}.` },
       { path: 'songs.maxPerUser', type: 'number', min: 1, max: 20, label: 'Canciones por persona' },

@@ -18,22 +18,32 @@ function clean(text, t) {
   return out;
 }
 
+// Teclados en español escriben "¡tts" o "! tts"; los tratamos igual que "!tts".
+function normalizeCommand(text) {
+  return String(text || '')
+    .trim()
+    .replace(/^[¡!]\s*/, '!');
+}
+
 // Devuelve el texto a leer para un mensaje de chat, o null si no aplica.
 function textForChat(event, settings, session) {
   const t = settings.tts;
   if (!t.enabled) return null;
-  let comment = String(event.comment || '').trim();
+  let comment = normalizeCommand(event.comment);
   const songCmd = settings.songs.command.toLowerCase();
   if (comment.toLowerCase().startsWith(songCmd)) return null;
 
-  if (t.mode === 'command') {
-    const cmd = t.command.toLowerCase();
-    if (!comment.toLowerCase().startsWith(cmd + ' ')) return null;
+  // El comando de voz (ej. "!tts hola") se lee en cualquier modo.
+  const cmd = t.command.toLowerCase();
+  const usedCommand = comment.toLowerCase().startsWith(cmd + ' ');
+  if (usedCommand) {
     comment = comment.slice(cmd.length).trim();
-  } else {
-    if (t.skipCommands && comment.startsWith('!')) return null;
-    if (t.mode === 'gifters' && !session.gifters.has(event.user.uniqueId)) return null;
+  } else if (t.mode === 'command') {
+    return null;
+  } else if (t.skipCommands && comment.startsWith('!')) {
+    return null;
   }
+  if (t.mode === 'gifters' && !session.gifters.has(event.user.uniqueId)) return null;
 
   const now = Date.now();
   const last = session.lastTts.get(event.user.uniqueId) || 0;
@@ -99,4 +109,4 @@ async function buildTts(text, settings) {
   return msg;
 }
 
-module.exports = { textForChat, buildTts, clean };
+module.exports = { textForChat, buildTts, clean, normalizeCommand };
