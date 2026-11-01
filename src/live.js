@@ -40,28 +40,40 @@ function remainingSeconds(user) {
   return limit - db.getUsageSeconds(user.id);
 }
 
-const toUser = (u = {}) => ({
-  uniqueId: u.uniqueId || '',
-  name: u.nickname || u.uniqueId || 'alguien',
-  avatar: u.profilePicture?.url?.[0] || '',
-});
+// La librería ha cambiado nombres de campos entre versiones (v2: comment/giftDetails,
+// v3: content/gift). Leemos ambos para no depender de una sola.
+const img = (m) => m?.urlList?.[0] || m?.url?.[0] || '';
+
+const toUser = (u = {}) => {
+  const handle = u.uniqueId || u.displayId || '';
+  return {
+    uniqueId: handle || String(u.id || u.userId || ''),
+    name: u.nickname || handle || 'alguien',
+    avatar: img(u.avatarThumb) || img(u.profilePicture),
+  };
+};
 
 function wire(userId, conn) {
   const emit = (event) => pipeline.handleEvent(userId, event);
 
-  conn.on(WebcastEvent.CHAT, (d) => emit({ kind: 'chat', user: toUser(d.user), comment: d.comment }));
+  conn.on(WebcastEvent.CHAT, (d) => {
+    const comment = d.content ?? d.comment ?? '';
+    if (!comment) return;
+    emit({ kind: 'chat', user: toUser(d.user), comment });
+  });
 
   conn.on(WebcastEvent.GIFT, (d) => {
-    const g = d.giftDetails || {};
-    // Los regalos en racha (giftType 1) llegan varias veces; solo se procesa el final.
-    if (g.giftType === 1 && !d.repeatEnd) return;
+    const g = d.gift || d.giftDetails || {};
+    const type = g.type ?? g.giftType;
+    // Los regalos en racha (tipo 1) llegan varias veces; solo se procesa el final.
+    if (type === 1 && !d.repeatEnd) return;
     emit({
       kind: 'gift',
       user: toUser(d.user),
       gift: {
         id: d.giftId,
-        name: g.giftName || 'regalo',
-        image: g.icon?.url?.[0] || g.giftImage?.url?.[0] || '',
+        name: g.name || g.giftName || 'regalo',
+        image: img(g.icon) || img(g.image) || img(g.giftImage),
         diamonds: Number(g.diamondCount) || 0,
         count: Number(d.repeatCount) || 1,
       },
@@ -73,7 +85,7 @@ function wire(userId, conn) {
 
   conn.on(WebcastEvent.ROOM_USER, (d) => {
     const l = lives.get(userId);
-    if (l) l.viewers = Number(d.viewerCount) || 0;
+    if (l) l.viewers = Number(d.viewerCount ?? d.total) || 0;
   });
 
   conn.on(WebcastEvent.STREAM_END, () => {
@@ -199,4 +211,4 @@ function stopAll() {
   for (const id of [...lives.keys()]) stop(id, 'Servidor reiniciándose.');
 }
 
-module.exports = { start, stop, stopAll, publicStatus, remainingSeconds, activeCount };
+module.exports = { start, stop, stopAll, publicStatus, remainingSeconds, activeCount, _wire: wire };
