@@ -437,27 +437,36 @@
     const max = me.planInfo.giftSounds;
     limitNote($('giftLimit'), rules.length, max, 'regalos con sonido');
     $('addGiftRule').disabled = rules.length >= max;
-    $('giftsSeenList').innerHTML = giftsSeen.map((g) => `<option value="${esc(g.name)}">${g.diamonds ? g.diamonds + ' 💎' : ''}</option>`).join('');
     box.innerHTML = rules.length ? '' : '<p class="empty">Todavía no hay regalos con sonido propio.</p>';
     for (const r of rules) {
       const row = document.createElement('div');
       row.className = 'rule';
       row.innerHTML = `
-        <label class="r-gift"><span>Regalo</span><input list="giftsSeenList" placeholder="Ej: Rose" value="${esc(r.giftName)}"></label>
+        <div class="r-gift"><span class="lbl">Regalo</span><button type="button" class="gift-pick"></button></div>
         <label class="r-sound"><span>Sonido</span></label>
         <label class="r-image"><span>Imagen (opcional)</span></label>
         <label class="r-text"><span>Texto (opcional)</span><input placeholder="${esc(me.settings.alerts.gift.template)}" value="${esc(r.text)}"></label>
         <div class="r-acts"><button class="sm" data-act="test">Probar</button><button class="sm ghost danger" data-act="remove" aria-label="Quitar regalo">Quitar</button></div>`;
-      const [giftIn] = row.querySelectorAll('.r-gift input');
+      const pickBtn = row.querySelector('.gift-pick');
       const textIn = row.querySelector('.r-text input');
       const commit = () => saveList('giftSounds', me.settings.giftSounds);
-      giftIn.addEventListener('change', () => {
-        const seen = giftsSeen.find((g) => g.name.toLowerCase() === giftIn.value.trim().toLowerCase());
-        r.giftName = giftIn.value.trim();
-        r.giftId = seen?.id || '';
-        r.giftImage = seen?.image || '';
-        commit();
-      });
+      const paintPick = () => {
+        const g = giftsSeen.find((x) => (r.giftId && x.id === r.giftId) || x.name === r.giftName);
+        const imgUrl = g?.image || r.giftImage;
+        pickBtn.innerHTML = r.giftName
+          ? `${imgUrl ? `<img src="${esc(imgUrl)}" alt="" referrerpolicy="no-referrer">` : '🎁'}<span>${esc(r.giftName)}</span>${g?.diamonds ? `<small>${g.diamonds} monedas</small>` : ''}`
+          : '<span class="muted">Elegir regalo…</span>';
+      };
+      paintPick();
+      pickBtn.addEventListener('click', () =>
+        openGiftPicker(pickBtn, (g) => {
+          r.giftName = g.name;
+          r.giftId = g.id || '';
+          r.giftImage = g.image || '';
+          paintPick();
+          commit();
+        })
+      );
       textIn.addEventListener('change', () => {
         r.text = textIn.value;
         commit();
@@ -465,8 +474,8 @@
       row.querySelector('.r-sound').append(mediaSelect('audio', r.soundId, (v) => ((r.soundId = v), commit())));
       row.querySelector('.r-image').append(mediaSelect('image', r.imageId, (v) => ((r.imageId = v), commit())));
       row.querySelector('[data-act=test]').addEventListener('click', () => {
-        if (!r.giftName) return toast('Primero escribe el nombre del regalo.', true);
-        post('/test/gift', { giftName: r.giftName, giftId: r.giftId }).catch((e) => toast(e.message, true));
+        if (!r.giftName) return toast('Primero elige el regalo.', true);
+        saveChain.then(() => post('/test/gift', { giftName: r.giftName, giftId: r.giftId, image: r.giftImage })).catch((e) => toast(e.message, true));
       });
       row.querySelector('[data-act=remove]').addEventListener('click', () => {
         me.settings.giftSounds = me.settings.giftSounds.filter((x) => x !== r);
@@ -477,10 +486,75 @@
     }
   }
 
+  // Selector visual de regalos (imagen, nombre y monedas), con búsqueda.
+  let pickerEl = null;
+  function closeGiftPicker() {
+    pickerEl?.remove();
+    pickerEl = null;
+  }
+  function openGiftPicker(anchor, onPick) {
+    closeGiftPicker();
+    const el = document.createElement('div');
+    el.className = 'gift-picker';
+    el.innerHTML = `<input type="search" placeholder="Buscar regalo…" aria-label="Buscar regalo"><ul role="listbox"></ul>`;
+    document.body.append(el);
+    pickerEl = el;
+    const r = anchor.getBoundingClientRect();
+    const width = Math.max(r.width, 300);
+    el.style.width = width + 'px';
+    el.style.left = Math.min(r.left + scrollX, scrollX + innerWidth - width - 12) + 'px';
+    el.style.top = r.bottom + scrollY + 6 + 'px';
+    const input = el.querySelector('input');
+    const ul = el.querySelector('ul');
+    const norm = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const paint = () => {
+      const q = norm(input.value.trim());
+      const list = giftsSeen.filter((g) => !q || norm(g.name).includes(q)).slice(0, 200);
+      ul.innerHTML = '';
+      if (!giftsSeen.length) {
+        ul.innerHTML = '<li class="empty">La lista de regalos se carga la primera vez que conectas Mafy a un LIVE. Mientras, escribe el nombre exacto del regalo.</li>';
+      }
+      for (const g of list) {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.tabIndex = 0;
+        li.innerHTML = `${g.image ? `<img src="${esc(g.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="ph">🎁</span>'}<span><b>${esc(g.name)}</b><small>${g.diamonds || '?'} monedas</small></span>`;
+        const choose = () => (onPick(g), closeGiftPicker());
+        li.addEventListener('click', choose);
+        li.addEventListener('keydown', (e) => e.key === 'Enter' && choose());
+        ul.append(li);
+      }
+      const typed = input.value.trim();
+      if (typed && !list.some((g) => norm(g.name) === q)) {
+        const li = document.createElement('li');
+        li.className = 'custom';
+        li.tabIndex = 0;
+        li.innerHTML = `<span class="ph">✍️</span><span><b>Usar “${esc(typed)}”</b><small>Escrito a mano</small></span>`;
+        const choose = () => (onPick({ id: '', name: typed, image: '' }), closeGiftPicker());
+        li.addEventListener('click', choose);
+        li.addEventListener('keydown', (e) => e.key === 'Enter' && choose());
+        ul.append(li);
+      }
+    };
+    input.addEventListener('input', paint);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeGiftPicker();
+      if (e.key === 'Enter') ul.querySelector('li[tabindex]')?.click();
+    });
+    paint();
+    input.focus();
+    setTimeout(() => document.addEventListener('pointerdown', function off(e) {
+      if (!pickerEl || pickerEl.contains(e.target)) return;
+      document.removeEventListener('pointerdown', off);
+      closeGiftPicker();
+    }), 0);
+  }
+  addEventListener('keydown', (e) => e.key === 'Escape' && closeGiftPicker());
+
   $('addGiftRule').addEventListener('click', () => {
     me.settings.giftSounds.push({ id: newId(), giftId: '', giftName: '', giftImage: '', soundId: '', imageId: '', text: '' });
     renderGiftSounds();
-    $('giftRules').lastElementChild.querySelector('input').focus();
+    $('giftRules').lastElementChild.querySelector('.gift-pick').click();
   });
 
   // ---------- sonidos por sticker ----------
@@ -721,7 +795,7 @@
           clearTimeout(giftsTimer);
           giftsTimer = setTimeout(async () => {
             giftsSeen = await api('/gifts-seen').catch(() => giftsSeen);
-            $('giftsSeenList').innerHTML = giftsSeen.map((g) => `<option value="${esc(g.name)}">${g.diamonds ? g.diamonds + ' 💎' : ''}</option>`).join('');
+
           }, 3000);
         }
       }

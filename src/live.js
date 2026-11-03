@@ -1,5 +1,36 @@
 // Gestiona una conexión al TikTok LIVE por streamer, con reconexión y conteo de horas.
-const { TikTokLiveConnection, WebcastEvent, ControlEvent, UserOfflineError } = require('tiktok-live-connector');
+const { TikTokLiveConnection, WebcastEvent, ControlEvent, UserOfflineError, getRandomPresets } = require('tiktok-live-connector');
+
+// Pedimos todo a TikTok "desde México en español", para que los nombres de los regalos
+// lleguen como los ve el streamer (Rosa, Tulipán…) y no en inglés.
+const MX_LOCATION = { lang_country: 'es-MX', lang: 'es', country: 'MX', tz_name: 'America/Mexico_City' };
+function clientPresets() {
+  try {
+    return { ...getRandomPresets(), location: MX_LOCATION };
+  } catch {
+    return undefined;
+  }
+}
+
+// Descarga el catálogo de regalos del LIVE (nombres, imagen y monedas) sin frenar la conexión.
+async function loadGiftCatalog(conn) {
+  try {
+    const gifts = await conn.fetchAvailableGifts();
+    if (Array.isArray(gifts) && gifts.length) {
+      const n = db.saveGiftCatalog(
+        gifts.map((g) => ({
+          id: String(g.id ?? ''),
+          name: g.name || '',
+          diamonds: Number(g.diamond_count ?? g.diamondCount) || 0,
+          image: g.image?.url_list?.[0] || g.image?.urlList?.[0] || g.icon?.url_list?.[0] || g.icon?.urlList?.[0] || '',
+        }))
+      );
+      console.log(`[live] catálogo de regalos actualizado (${n})`);
+    }
+  } catch (err) {
+    console.warn('[live] no se pudo bajar la lista de regalos:', err?.message);
+  }
+}
 const config = require('./config');
 const db = require('./db');
 const hub = require('./hub');
@@ -151,6 +182,7 @@ async function attempt(userId) {
     signApiKey: config.eulerApiKey || undefined,
     processInitialData: false,
     enableExtendedGiftInfo: false,
+    clientPresets: clientPresets(),
   });
   l.conn = conn;
   wire(userId, conn);
@@ -160,6 +192,7 @@ async function attempt(userId) {
     if (l.stopping) return conn.disconnect();
     l.errors = 0;
     state.resetSession(userId);
+    loadGiftCatalog(conn);
     setStatus(userId, 'live', `Conectado al LIVE de @${l.username}`);
     pipeline.log(userId, { kind: 'system', text: `Conectado al LIVE de @${l.username}` });
   } catch (err) {

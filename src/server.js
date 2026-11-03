@@ -266,7 +266,7 @@ app.post(
       event.gift = {
         id: String(req.body.giftId || '').replace(/[^0-9]/g, ''),
         name: g.name,
-        image: '',
+        image: /^https:\/\/[^\s"'<>]+$/i.test(req.body.image || '') ? String(req.body.image).slice(0, 600) : '',
         diamonds: Number(req.body.diamonds) || g.diamonds,
         count: req.body.giftName ? 1 : 1 + crypto.randomInt(5),
       };

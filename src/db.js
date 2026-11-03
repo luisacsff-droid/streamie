@@ -58,6 +58,13 @@ CREATE TABLE IF NOT EXISTS stickers_seen (
   last_at    INTEGER NOT NULL,
   PRIMARY KEY (user_id, sticker_id)
 );
+CREATE TABLE IF NOT EXISTS gift_catalog (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  image      TEXT NOT NULL DEFAULT '',
+  diamonds   INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS usage (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   month   TEXT NOT NULL,
@@ -110,6 +117,9 @@ const stmts = {
   listStickers: db.prepare(
     'SELECT sticker_id AS id, image, times FROM stickers_seen WHERE user_id = ? ORDER BY times DESC, last_at DESC LIMIT 120'
   ),
+  upsertCatalog: db.prepare(`INSERT INTO gift_catalog (id, name, image, diamonds, updated_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, image = excluded.image, diamonds = excluded.diamonds, updated_at = excluded.updated_at`),
+  listCatalog: db.prepare('SELECT id, name, image, diamonds FROM gift_catalog ORDER BY diamonds ASC, name ASC'),
   listGifts: db.prepare(
     'SELECT gift_id AS id, name, image, diamonds FROM gifts_seen WHERE user_id = ? ORDER BY last_at DESC LIMIT 150'
   ),
@@ -180,7 +190,28 @@ module.exports = {
     const key = g.id ? `id:${g.id}` : `name:${String(g.name).toLowerCase()}`;
     stmts.upsertGift.run(userId, key, String(g.id || ''), String(g.name || 'regalo').slice(0, 60), g.image || '', g.diamonds || 0, Date.now());
   },
-  listGifts: (userId) => stmts.listGifts.all(userId),
+  // Lista general de regalos de TikTok (la misma para todos los streamers).
+  saveGiftCatalog(gifts) {
+    const now = Date.now();
+    const tx = db.transaction((list) => {
+      let n = 0;
+      for (const g of list) {
+        if (!g.id || !g.name) continue;
+        stmts.upsertCatalog.run(g.id, String(g.name).slice(0, 60), g.image || '', g.diamonds || 0, now);
+        n++;
+      }
+      return n;
+    });
+    return tx(gifts);
+  },
+  // Regalos para elegir: el catálogo completo más los que el streamer recibió y no estén en él.
+  listGifts(userId) {
+    const catalog = stmts.listCatalog.all();
+    const ids = new Set(catalog.map((g) => g.id));
+    const names = new Set(catalog.map((g) => g.name.toLowerCase()));
+    const extra = stmts.listGifts.all(userId).filter((g) => !(g.id && ids.has(g.id)) && !names.has(g.name.toLowerCase()));
+    return [...catalog, ...extra];
+  },
 
   // Stickers (emotes) que han llegado en el chat del streamer
   rememberSticker: (userId, st) => stmts.upsertSticker.run(userId, String(st.id), st.image || '', Date.now()),
