@@ -42,7 +42,7 @@
     let busy = false;
     let volume = 0.8;
     const stage = document.getElementById('stage');
-    const GLYPH = { follow: '💜', share: '🔁', gift: '🎁' };
+    const GLYPH = { follow: '💚', share: '🔁', gift: '🎁', sticker: '💬' };
     const RAYS = `<svg class="rays" viewBox="0 0 100 100" aria-hidden="true">${Array.from({ length: 12 }, (_, i) =>
       `<path d="M50 50 L${50 + 60 * Math.cos((i * 30 - 4) * Math.PI / 180)} ${50 + 60 * Math.sin((i * 30 - 4) * Math.PI / 180)} L${50 + 60 * Math.cos((i * 30 + 4) * Math.PI / 180)} ${50 + 60 * Math.sin((i * 30 + 4) * Math.PI / 180)}Z" fill="#b6ff1f" opacity=".35"/>`).join('')}</svg>`;
 
@@ -105,6 +105,12 @@
       if (msg.type === 'hello' || msg.type === 'config') {
         volume = msg.alertsVolume;
         overlayBranding(msg.branding, msg.appName);
+      } else if (msg.type === 'sound') {
+        // Solo sonido (sticker sin alerta en pantalla): suena al instante, sin esperar la cola.
+        const s = new Audio(msg.soundUrl || '');
+        s.volume = msg.volume ?? volume;
+        if (msg.soundUrl) s.play().catch(() => chime(s.volume));
+        else chime(s.volume);
       } else if (msg.type === 'alert') {
         if (queue.length < 30) queue.push(msg);
         next();

@@ -12,6 +12,7 @@ El streamer crea su cuenta, escribe su usuario de TikTok, pega tres links en OBS
 |---|---|---|
 | Alertas de regalos, follows y shares | ✅ textos fijos | ✅ textos, sonido e imagen propios |
 | Sonido propio por regalo | 5 regalos | 50 regalos |
+| Sonido propio por sticker del chat (se detectan solos) | 5 stickers | 50 stickers |
 | Eventos manuales (alertas que disparas con un botón) | 3 | 30 |
 | Archivos subidos (sonidos, imágenes, GIFs) | 10 de hasta 1 MB | 100 de hasta 5 MB |
 | TTS (leer el chat) | voz del navegador, 100 letras | voces naturales (Google), 300 letras, modo “solo quien regaló” |

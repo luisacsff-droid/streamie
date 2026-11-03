@@ -4,7 +4,7 @@ const hub = require('./hub');
 const state = require('./state');
 const config = require('./config');
 const { getPlan } = require('./plans');
-const { buildAlert, buildCustomAlert } = require('./modules/alerts');
+const { buildAlert, buildCustomAlert, buildStickerAlert } = require('./modules/alerts');
 const tts = require('./modules/tts');
 const songs = require('./modules/songs');
 
@@ -52,6 +52,39 @@ async function speak(user, text) {
   hub.send(user.id, msg, ['player']);
 }
 
+// Stickers ya conocidos por streamer (para avisar cuando aparece uno nuevo).
+const knownStickers = new Map();
+function isNewSticker(userId, id) {
+  if (!knownStickers.has(userId)) knownStickers.set(userId, new Set(db.listStickers(userId).map((x) => x.id)));
+  const set = knownStickers.get(userId);
+  if (set.has(id)) return false;
+  set.add(id);
+  return true;
+}
+
+// Evita que alguien sature el stream mandando el mismo sticker muchas veces seguidas.
+const stickerCooldown = new Map();
+const STICKER_COOLDOWN_MS = 4000;
+
+function handleSticker(user, event) {
+  const st = event.sticker;
+  if (!event.simulated) {
+    const fresh = isNewSticker(user.id, st.id);
+    db.rememberSticker(user.id, st);
+    if (fresh) {
+      log(user.id, { kind: 'sticker', user: event.user.name, text: `Sticker nuevo detectado (de ${event.user.name}). Ya puedes ponerle sonido en la pestaña Stickers.`, sticker: st });
+    }
+  }
+  const rule = user.settings.stickerSounds.find((r) => r.stickerId === st.id);
+  if (!rule) return;
+  const key = `${user.id}|${event.user.uniqueId}|${st.id}`;
+  if (Date.now() - (stickerCooldown.get(key) || 0) < STICKER_COOLDOWN_MS) return;
+  stickerCooldown.set(key, Date.now());
+  if (stickerCooldown.size > 5000) stickerCooldown.clear();
+  log(user.id, { kind: 'sticker', user: event.user.name, text: `${event.user.name} mandó tu sticker 🔊`, sticker: st });
+  sendAlert(user.id, buildStickerAlert(event, rule, user.settings));
+}
+
 async function handleEvent(userId, event) {
   const user = getUser(userId);
   if (!user) return;
@@ -71,6 +104,8 @@ async function handleEvent(userId, event) {
       if (text) await speak(user, text);
       return;
     }
+
+    if (event.kind === 'sticker') return handleSticker(user, event);
 
     if (event.kind === 'gift') {
       session.gifters.add(event.user.uniqueId);

@@ -56,11 +56,24 @@ const toUser = (u = {}) => {
 function wire(userId, conn) {
   const emit = (event) => pipeline.handleEvent(userId, event);
 
+  // Stickers (emotes) del chat: llegan solos o dentro de un mensaje.
+  const emitStickers = (user, list) => {
+    for (const e of list || []) {
+      const em = e?.emote || e;
+      const id = em?.emoteId || em?.emote_id;
+      if (id) emit({ kind: 'sticker', user, sticker: { id: String(id), image: img(em.image) } });
+    }
+  };
+
   conn.on(WebcastEvent.CHAT, (d) => {
+    const user = toUser(d.user);
+    emitStickers(user, d.emotes);
     const comment = d.content ?? d.comment ?? '';
     if (!comment) return;
-    emit({ kind: 'chat', user: toUser(d.user), comment });
+    emit({ kind: 'chat', user, comment });
   });
+
+  conn.on(WebcastEvent.EMOTE, (d) => emitStickers(toUser(d.user), d.emoteList || d.emotes));
 
   conn.on(WebcastEvent.GIFT, (d) => {
     const g = d.gift || d.giftDetails || {};

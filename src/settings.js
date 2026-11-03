@@ -16,6 +16,9 @@ const DEFAULTS = {
   // Reglas: cuando llega cierto regalo, suena su propio sonido.
   // { id, giftId, giftName, giftImage, soundId, imageId, text }
   giftSounds: [],
+  // Reglas: cuando un viewer manda cierto sticker en el chat, suena su sonido.
+  // { id, stickerId, stickerImage, soundId, imageId, text, showAlert }
+  stickerSounds: [],
   // Alertas propias que el streamer dispara con un botón.
   // { id, name, emoji, text, soundId, imageId }
   events: [],
@@ -94,6 +97,21 @@ function normalizeSettings(raw, planId) {
       imageId: mediaId(r.imageId),
       text: str(r.text, 120),
     }));
+
+  // Sonidos por sticker
+  const seenSticker = new Set();
+  s.stickerSounds = list(s.stickerSounds)
+    .map((r) => ({
+      id: itemId(r.id),
+      stickerId: str(r.stickerId, 40).replace(/[^0-9A-Za-z_-]/g, ''),
+      stickerImage: /^https:\/\/[^\s"'<>]+$/i.test(r.stickerImage || '') ? str(r.stickerImage, 600) : '',
+      soundId: mediaId(r.soundId),
+      imageId: mediaId(r.imageId),
+      text: str(r.text, 120),
+      showAlert: r.showAlert !== false,
+    }))
+    .filter((r) => r.stickerId && !seenSticker.has(r.stickerId) && seenSticker.add(r.stickerId))
+    .slice(0, plan.stickerSounds);
 
   // Eventos manuales
   s.events = list(s.events)

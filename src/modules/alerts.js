@@ -74,6 +74,24 @@ function buildAlert(event, settings) {
   };
 }
 
+// Sticker con sonido: alerta completa o solo el sonido, según la regla.
+function buildStickerAlert(event, rule, settings) {
+  const soundUrl = rule.soundId ? mediaUrl(rule.soundId) : mediaUrl(settings.alerts.soundId);
+  if (!rule.showAlert) {
+    return { type: 'sound', id: crypto.randomUUID(), soundUrl, volume: settings.alerts.volume };
+  }
+  return {
+    ...base(settings),
+    kind: 'sticker',
+    text: render(rule.text || '{user}', { user: event.user.name }),
+    user: event.user,
+    gift: null,
+    soundUrl,
+    // La imagen del sticker que llega es la más reciente (las de TikTok caducan).
+    imageUrl: rule.imageId ? mediaUrl(rule.imageId) : event.sticker.image || rule.stickerImage || '',
+  };
+}
+
 // Alerta de un evento manual ("¡mandó un capibara!").
 function buildCustomAlert(ev, userName, settings) {
   const name = String(userName || '').trim();
@@ -91,4 +109,4 @@ function buildCustomAlert(ev, userName, settings) {
   };
 }
 
-module.exports = { buildAlert, buildCustomAlert, findGiftRule, norm };
+module.exports = { buildAlert, buildCustomAlert, buildStickerAlert, findGiftRule, norm };

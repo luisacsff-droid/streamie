@@ -108,6 +108,23 @@
 .e-emoji { font-size: 20px; }
 .quick-events .empty { grid-column: 1 / -1; }
 
+/* stickers */
+.sub-title { margin-top: 4px; }
+.sticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin: 10px 0 22px; }
+.sticker-tile {
+  position: relative; aspect-ratio: 1; padding: 6px; border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center;
+}
+.sticker-tile img { width: 100%; height: 100%; object-fit: contain; }
+.sticker-tile:hover { border-color: var(--spark); }
+.sticker-tile.on { border-color: var(--spark); box-shadow: inset 0 0 0 1px var(--spark); }
+.sticker-tile.on::after { content: '🔊'; position: absolute; right: 3px; bottom: 2px; font-size: 13px; }
+.sticker-grid .empty { grid-column: 1 / -1; background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius-sm); padding: 14px; }
+.rule .r-thumb { grid-area: emoji; display: flex; align-items: center; gap: 12px; }
+.rule .r-thumb img { width: 56px; height: 56px; object-fit: contain; background: var(--night); border-radius: var(--radius-sm); padding: 4px; }
+.rule .r-show { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.rule.sticker { grid-template-areas: 'emoji sound image' 'text text acts'; }
+
 /* columna lateral */
 .box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; }
 .box h2 { margin-bottom: 4px; }
@@ -134,7 +151,7 @@
 .log time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
 .log .gift { color: var(--spark); }
 .log .song { color: #7fe7ff; }
-.log .event { color: var(--spark); }
+.log .event, .log .sticker { color: var(--spark); }
 .log .system { color: var(--live); }
 
 @media (max-width: 980px) {
@@ -147,7 +164,7 @@
   .field .control { justify-content: flex-start; }
   .connect-form > button { flex: 1; }
   .chat-test { grid-template-columns: 1fr; }
-  .rule, .rule:not(:has(.r-emoji)) { grid-template-columns: 1fr; grid-template-areas: 'emoji' 'gift' 'sound' 'image' 'text' 'acts'; }
+  .rule, .rule.sticker, .rule:not(:has(.r-emoji)) { grid-template-columns: 1fr; grid-template-areas: 'emoji' 'gift' 'sound' 'image' 'text' 'acts'; }
   .media-list li { grid-template-columns: auto minmax(0, 1fr) auto auto; }
   .media-list li .small { display: none; }
   .usage { display: none; }

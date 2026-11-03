@@ -46,6 +46,7 @@
         <button role="tab" data-tab="overlays" aria-selected="true">Overlays</button>
         <button role="tab" data-tab="alerts" aria-selected="false">Alertas</button>
         <button role="tab" data-tab="gifts" aria-selected="false">Regalos</button>
+        <button role="tab" data-tab="stickers" aria-selected="false">Stickers</button>
         <button role="tab" data-tab="events" aria-selected="false">Eventos</button>
         <button role="tab" data-tab="tts" aria-selected="false">Voz</button>
         <button role="tab" data-tab="songs" aria-selected="false">Canciones</button>
@@ -83,6 +84,14 @@
         <div class="list-head"><span id="giftLimit" class="small muted"></span><button id="addGiftRule" class="primary sm">Agregar regalo</button></div>
         <datalist id="giftsSeenList"></datalist>
         <div id="giftRules" class="rules"></div>
+      </div>
+      <div class="tab-panel" data-panel="stickers" hidden>
+        <p class="muted intro">Cuando un viewer mande uno de tus stickers en el chat, sonará el sonido que elijas. TikTok no deja a otras apps leer tu lista de stickers, así que Mafy los va <b>detectando</b> conforme llegan al chat de tu LIVE.</p>
+        <h3 class="sub-title">Stickers detectados</h3>
+        <p class="small muted">Toca uno para ponerle sonido.</p>
+        <div id="stickerGrid" class="sticker-grid"></div>
+        <div class="list-head"><span id="stickerLimit" class="small muted"></span></div>
+        <div id="stickerRules" class="rules"></div>
       </div>
       <div class="tab-panel" data-panel="events" hidden>
         <p class="muted intro">Alertas que tú disparas con un botón, por ejemplo cuando alguien dice o hace algo especial. Usa <b>{user}</b> en el texto para poner el nombre de la persona.</p>

@@ -50,6 +50,14 @@ CREATE TABLE IF NOT EXISTS gifts_seen (
   last_at  INTEGER NOT NULL,
   PRIMARY KEY (user_id, gift_key)
 );
+CREATE TABLE IF NOT EXISTS stickers_seen (
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sticker_id TEXT NOT NULL,
+  image      TEXT NOT NULL DEFAULT '',
+  times      INTEGER NOT NULL DEFAULT 1,
+  last_at    INTEGER NOT NULL,
+  PRIMARY KEY (user_id, sticker_id)
+);
 CREATE TABLE IF NOT EXISTS usage (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   month   TEXT NOT NULL,
@@ -96,6 +104,12 @@ const stmts = {
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, gift_key) DO UPDATE SET name = excluded.name, image = excluded.image,
       diamonds = excluded.diamonds, last_at = excluded.last_at`),
+  upsertSticker: db.prepare(`INSERT INTO stickers_seen (user_id, sticker_id, image, times, last_at) VALUES (?, ?, ?, 1, ?)
+    ON CONFLICT(user_id, sticker_id) DO UPDATE SET image = CASE WHEN excluded.image != '' THEN excluded.image ELSE image END,
+      times = times + 1, last_at = excluded.last_at`),
+  listStickers: db.prepare(
+    'SELECT sticker_id AS id, image, times FROM stickers_seen WHERE user_id = ? ORDER BY times DESC, last_at DESC LIMIT 120'
+  ),
   listGifts: db.prepare(
     'SELECT gift_id AS id, name, image, diamonds FROM gifts_seen WHERE user_id = ? ORDER BY last_at DESC LIMIT 150'
   ),
@@ -167,4 +181,8 @@ module.exports = {
     stmts.upsertGift.run(userId, key, String(g.id || ''), String(g.name || 'regalo').slice(0, 60), g.image || '', g.diamonds || 0, Date.now());
   },
   listGifts: (userId) => stmts.listGifts.all(userId),
+
+  // Stickers (emotes) que han llegado en el chat del streamer
+  rememberSticker: (userId, st) => stmts.upsertSticker.run(userId, String(st.id), st.image || '', Date.now()),
+  listStickers: (userId) => stmts.listStickers.all(userId),
 };

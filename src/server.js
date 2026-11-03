@@ -219,6 +219,24 @@ app.post('/api/live/stop', auth, (req, res) => {
 
 app.get('/api/log', auth, (req, res) => res.json(state.get(req.user.id).log));
 
+// Probar el sonido de un sticker sin estar en vivo.
+app.post(
+  '/api/test/sticker',
+  auth,
+  wrap(async (req, res) => {
+    const id = String(req.body.stickerId || '').slice(0, 40);
+    if (!id) throw new HttpError(400, 'Falta el sticker.');
+    const rule = req.user.settings.stickerSounds.find((r) => r.stickerId === id);
+    await pipeline.handleEvent(req.user.id, {
+      kind: 'sticker',
+      simulated: true,
+      user: { uniqueId: 'viewer_prueba_' + Date.now(), name: 'viewer_prueba', avatar: '' },
+      sticker: { id, image: db.listStickers(req.user.id).find((x) => x.id === id)?.image || rule?.stickerImage || '' },
+    });
+    res.json({ ok: true });
+  })
+);
+
 // ---------- pruebas (eventos simulados) ----------
 const FAKE_NAMES = ['luna_gamer', 'el_profe_mx', 'sofi.dance', 'carlitos99', 'mariana_live', 'tacos_al_pastor'];
 const FAKE_GIFTS = [
@@ -271,6 +289,9 @@ app.post(
 
 // ---------- regalos recibidos ----------
 app.get('/api/gifts-seen', auth, (req, res) => res.json(db.listGifts(req.user.id)));
+app.get('/api/stickers-seen', auth, (req, res) => res.json(db.listStickers(req.user.id)));
+
+
 
 // ---------- archivos (sonidos e imágenes) ----------
 const mediaView = (m) => ({ id: m.id, kind: m.kind, name: m.name, size: m.size, url: media.mediaUrl(m.id) });
@@ -315,6 +336,7 @@ app.delete('/api/media/:id', auth, (req, res) => {
   };
   strip(s.alerts);
   s.giftSounds.forEach(strip);
+  s.stickerSounds.forEach(strip);
   s.events.forEach(strip);
   db.saveSettings(req.user.id, normalizeSettings(s, req.user.plan));
   pipeline.pushConfig(req.user.id);

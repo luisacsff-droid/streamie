@@ -483,6 +483,82 @@
     $('giftRules').lastElementChild.querySelector('input').focus();
   });
 
+  // ---------- sonidos por sticker ----------
+  let stickersSeen = [];
+
+  function addStickerRule(st) {
+    const rules = me.settings.stickerSounds;
+    const existing = rules.find((r) => r.stickerId === st.id);
+    if (!existing) {
+      if (rules.length >= me.planInfo.stickerSounds) {
+        return toast(`Tu plan permite ${me.planInfo.stickerSounds} stickers con sonido. Quita uno para agregar otro.`, true);
+      }
+      rules.push({ id: newId(), stickerId: st.id, stickerImage: st.image, soundId: '', imageId: '', text: '{user}', showAlert: true });
+      saveList('stickerSounds', rules);
+    }
+    renderStickers();
+    const row = document.querySelector(`#stickerRules [data-sticker="${CSS.escape(st.id)}"]`);
+    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row?.querySelector('select')?.focus();
+  }
+
+  function renderStickers() {
+    const rules = me.settings.stickerSounds;
+    const max = me.planInfo.stickerSounds;
+    const withSound = new Set(rules.map((r) => r.stickerId));
+    const grid = $('stickerGrid');
+    grid.innerHTML = stickersSeen.length
+      ? ''
+      : '<p class="empty small">Aún no se detecta ningún sticker. Conecta Mafy a tu LIVE y pide a alguien (o usa otra cuenta) que mande cada uno de tus stickers en el chat. Aparecerán aquí solos.</p>';
+    for (const st of stickersSeen) {
+      const b = document.createElement('button');
+      b.className = 'sticker-tile' + (withSound.has(st.id) ? ' on' : '');
+      b.title = withSound.has(st.id) ? 'Ya tiene sonido' : 'Ponerle sonido';
+      b.innerHTML = st.image ? `<img src="${esc(st.image)}" alt="Sticker" loading="lazy" referrerpolicy="no-referrer">` : '💬';
+      b.addEventListener('click', () => addStickerRule(st));
+      grid.append(b);
+    }
+
+    limitNote($('stickerLimit'), rules.length, max, 'stickers con sonido');
+    const box = $('stickerRules');
+    box.innerHTML = '';
+    for (const r of rules) {
+      const latest = stickersSeen.find((x) => x.id === r.stickerId)?.image || r.stickerImage;
+      const row = document.createElement('div');
+      row.className = 'rule sticker';
+      row.dataset.sticker = r.stickerId;
+      row.innerHTML = `
+        <div class="r-thumb">${latest ? `<img src="${esc(latest)}" alt="Sticker" referrerpolicy="no-referrer">` : '💬'}
+          <label class="r-show"><span class="switch"><input type="checkbox"><span></span></span>Mostrar en pantalla</label></div>
+        <label class="r-sound"><span>Sonido</span></label>
+        <label class="r-image"><span>Imagen (opcional)</span></label>
+        <label class="r-text"><span>Texto en pantalla</span><input maxlength="120" placeholder="{user}" value="${esc(r.text)}"></label>
+        <div class="r-acts"><button class="sm" data-act="test">Probar</button><button class="sm ghost danger" data-act="remove">Quitar</button></div>`;
+      const commit = () => saveList('stickerSounds', me.settings.stickerSounds);
+      const show = row.querySelector('.r-show input');
+      const textIn = row.querySelector('.r-text input');
+      show.checked = r.showAlert;
+      textIn.disabled = !r.showAlert;
+      show.addEventListener('change', () => {
+        r.showAlert = show.checked;
+        textIn.disabled = !show.checked;
+        commit();
+      });
+      textIn.addEventListener('change', () => ((r.text = textIn.value), commit()));
+      row.querySelector('.r-sound').append(mediaSelect('audio', r.soundId, (v) => ((r.soundId = v), commit())));
+      row.querySelector('.r-image').append(mediaSelect('image', r.imageId, (v) => ((r.imageId = v), commit())));
+      row.querySelector('[data-act=test]').addEventListener('click', () =>
+        saveChain.then(() => post('/test/sticker', { stickerId: r.stickerId })).catch((e) => toast(e.message, true))
+      );
+      row.querySelector('[data-act=remove]').addEventListener('click', () => {
+        me.settings.stickerSounds = me.settings.stickerSounds.filter((x) => x !== r);
+        commit();
+        renderStickers();
+      });
+      box.append(row);
+    }
+  }
+
   // ---------- eventos manuales ----------
   function renderEvents() {
     const box = $('eventList');
@@ -592,6 +668,7 @@
   function renderAllLists() {
     renderFields();
     renderGiftSounds();
+    renderStickers();
     renderEvents();
     renderQuickEvents();
     renderMediaLibrary();
@@ -636,6 +713,10 @@
       if (msg.type === 'log') {
         addLog(msg.entry);
         // Un regalo nuevo puede ser uno que aún no estaba en la lista para asignar sonidos.
+        if (msg.entry.kind === 'sticker' && msg.entry.sticker && !stickersSeen.some((x) => x.id === msg.entry.sticker.id)) {
+          stickersSeen.unshift(msg.entry.sticker);
+          renderStickers();
+        }
         if (msg.entry.kind === 'gift') {
           clearTimeout(giftsTimer);
           giftsTimer = setTimeout(async () => {
@@ -684,7 +765,7 @@
   // ---------- inicio ----------
   (async () => {
     me = await api('/me');
-    [mediaList, giftsSeen] = await Promise.all([api('/media'), api('/gifts-seen')]);
+    [mediaList, giftsSeen, stickersSeen] = await Promise.all([api('/media'), api('/gifts-seen'), api('/stickers-seen')]);
     renderHeader();
     renderAllLists();
     renderStatus(me.live);
