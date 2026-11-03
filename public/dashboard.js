@@ -739,13 +739,15 @@
   $('uploadSound').addEventListener('click', () => uploadFile('audio').catch((e) => toast(e.message, true)));
   $('uploadImage').addEventListener('click', () => uploadFile('image').catch((e) => toast(e.message, true)));
 
+  // Si una sección falla, las demás se siguen mostrando.
   function renderAllLists() {
-    renderFields();
-    renderGiftSounds();
-    renderStickers();
-    renderEvents();
-    renderQuickEvents();
-    renderMediaLibrary();
+    for (const fn of [renderFields, renderGiftSounds, renderStickers, renderEvents, renderQuickEvents, renderMediaLibrary]) {
+      try {
+        fn();
+      } catch (err) {
+        console.error(fn.name, err);
+      }
+    }
   }
 
   // Personas recientes del chat, para el campo "para quién" de los eventos.

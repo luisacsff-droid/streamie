@@ -403,7 +403,16 @@ app.get('/app', (req, res) => res.sendFile(path.join(PUBLIC, 'dashboard.html')))
 app.get('/o/alerts', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-alerts.html')));
 app.get('/o/player', (req, res) => res.sendFile(path.join(PUBLIC, 'player.html')));
 app.get('/o/songs', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-songs.html')));
-app.use(express.static(PUBLIC, { extensions: ['html'], maxAge: config.isProd ? '1h' : 0 }));
+// Código y estilos: el navegador siempre pregunta si hay versión nueva (así una actualización
+// no se mezcla con archivos viejos guardados). Imágenes: se guardan un día.
+app.use(
+  express.static(PUBLIC, {
+    extensions: ['html'],
+    setHeaders(res, file) {
+      res.setHeader('Cache-Control', /\.(js|css|html)$/.test(file) ? 'no-cache' : 'public, max-age=86400');
+    },
+  })
+);
 
 // ---------- errores ----------
 app.use('/api', (req, res) => res.status(404).json({ error: 'No encontrado.' }));
