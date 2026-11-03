@@ -4,7 +4,7 @@ const hub = require('./hub');
 const state = require('./state');
 const config = require('./config');
 const { getPlan } = require('./plans');
-const { buildAlert } = require('./modules/alerts');
+const { buildAlert, buildCustomAlert } = require('./modules/alerts');
 const tts = require('./modules/tts');
 const songs = require('./modules/songs');
 
@@ -26,14 +26,26 @@ function log(userId, entry) {
   hub.send(userId, { type: 'log', entry: { at: Date.now(), ...entry } }, ['dashboard']);
 }
 
-const lastNoPlayerWarn = new Map();
+// Avisos en el panel cuando falta abrir un overlay (máx. 1 vez por minuto por tipo).
+const lastWarn = new Map();
+function warnOnce(userId, key, text) {
+  const k = `${userId}|${key}`;
+  if (Date.now() - (lastWarn.get(k) || 0) < 60_000) return;
+  lastWarn.set(k, Date.now());
+  log(userId, { kind: 'system', text });
+}
+
+function sendAlert(userId, alert) {
+  if (!hub.count(userId, 'alerts')) {
+    warnOnce(userId, 'alerts', 'Hay una alerta, pero el overlay de Alertas no está abierto en OBS o LIVE Studio.');
+  }
+  hub.send(userId, alert, ['alerts']);
+}
+
 async function speak(user, text) {
   if (!hub.count(user.id, 'player')) {
-    // Nadie escuchando: no gastes en TTS, pero avisa en el panel (máx. 1 vez por minuto).
-    if (Date.now() - (lastNoPlayerWarn.get(user.id) || 0) > 60_000) {
-      lastNoPlayerWarn.set(user.id, Date.now());
-      log(user.id, { kind: 'system', text: 'Hay voz por leer, pero el Reproductor no está abierto. Ábrelo y dale “Activar audio”.' });
-    }
+    // Nadie escuchando: no gastes en TTS, pero avisa en el panel.
+    warnOnce(user.id, 'player', 'Hay voz por leer, pero el Reproductor no está abierto. Ábrelo y dale “Activar audio”.');
     return;
   }
   const msg = await tts.buildTts(text, user.settings);
@@ -47,7 +59,7 @@ async function handleEvent(userId, event) {
 
   try {
     if (event.kind === 'chat') {
-      log(userId, { kind: 'chat', text: `${event.user.name}: ${event.comment}` });
+      log(userId, { kind: 'chat', user: event.user.name, text: `${event.user.name}: ${event.comment}` });
       const cmd = user.settings.songs.command.toLowerCase();
       const comment = tts.normalizeCommand(event.comment);
       if (comment.toLowerCase() === cmd || comment.toLowerCase().startsWith(cmd + ' ')) {
@@ -63,23 +75,37 @@ async function handleEvent(userId, event) {
     if (event.kind === 'gift') {
       session.gifters.add(event.user.uniqueId);
       const total = event.gift.diamonds * event.gift.count;
-      log(userId, { kind: 'gift', text: `${event.user.name} envió ${event.gift.count}x ${event.gift.name} (${total} 💎)` });
+      log(userId, { kind: 'gift', user: event.user.name, text: `${event.user.name} envió ${event.gift.count}x ${event.gift.name} (${total} 💎)` });
+      if (!event.simulated) db.rememberGift(userId, event.gift);
       const moved = songs.onGift(user, event);
       if (moved) log(userId, { kind: 'song', text: moved });
     } else if (event.kind === 'follow' || event.kind === 'share') {
-      log(userId, { kind: event.kind, text: `${event.user.name} ${event.kind === 'follow' ? 'te siguió' : 'compartió el LIVE'}` });
+      log(userId, { kind: event.kind, user: event.user.name, text: `${event.user.name} ${event.kind === 'follow' ? 'te siguió' : 'compartió el LIVE'}` });
     } else {
       return;
     }
 
     const alert = buildAlert(event, user.settings);
     if (alert) {
-      hub.send(userId, alert, ['alerts']);
+      sendAlert(userId, alert);
       if (user.settings.alerts.readAloud) await speak(user, alert.text);
     }
   } catch (err) {
     console.error('[pipeline]', err);
   }
+}
+
+// El streamer dispara una alerta propia desde el panel.
+async function fireEvent(userId, eventId, userName) {
+  invalidate(userId);
+  const user = getUser(userId);
+  const ev = user?.settings.events.find((e) => e.id === eventId);
+  if (!ev) return false;
+  const alert = buildCustomAlert(ev, userName, user.settings);
+  sendAlert(userId, alert);
+  log(userId, { kind: 'event', text: `Evento: ${alert.text}` });
+  if (user.settings.alerts.readAloud) await speak(user, alert.text);
+  return true;
 }
 
 // Mensaje de bienvenida a cada pantalla con lo que necesita para pintarse.
@@ -102,4 +128,4 @@ function pushConfig(userId) {
   if (user) hub.send(userId, { ...helloFor(user), type: 'config' });
 }
 
-module.exports = { handleEvent, helloFor, pushConfig, invalidate, log };
+module.exports = { handleEvent, fireEvent, helloFor, pushConfig, invalidate, log };

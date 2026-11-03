@@ -1,5 +1,5 @@
 {
-  "name": "streamie",
+  "name": "mafy",
   "version": "0.1.0",
   "description": "Alertas, TTS y song request para TikTok LIVE",
   "main": "src/server.js",

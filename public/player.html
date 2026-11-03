@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reproductor · Streamie</title>
+  <title>Reproductor · Mafy</title>
+  <link rel="icon" type="image/png" href="/img/favicon.png">
   <link rel="stylesheet" href="/styles.css">
   <style>
     main { max-width: 720px; margin: 0 auto; padding: 28px 20px; display: grid; gap: 18px; }
@@ -19,7 +20,7 @@
     .voice { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
     #speaking { min-height: 1.5em; }
     #unlock {
-      position: fixed; inset: 0; background: rgba(23, 17, 42, .94); display: grid; place-items: center; z-index: 10; text-align: center; padding: 20px;
+      position: fixed; inset: 0; background: rgba(0, 0, 0, .94); display: grid; place-items: center; z-index: 10; text-align: center; padding: 20px;
     }
     #unlock div { display: grid; gap: 14px; justify-items: center; max-width: 420px; }
     #unlock .primary { font-size: 18px; padding: 14px 28px; }
@@ -78,7 +79,7 @@
     function loadVoices() {
       const voices = speechSynthesis.getVoices();
       const sel = $('voiceSelect');
-      const saved = localStorage.getItem('streamie_voice');
+      const saved = localStorage.getItem('mafy_voice');
       sel.innerHTML = '';
       voices
         .slice()
@@ -91,7 +92,7 @@
       loadVoices();
       speechSynthesis.onvoiceschanged = loadVoices;
     }
-    $('voiceSelect').onchange = (e) => { try { localStorage.setItem('streamie_voice', e.target.value); } catch {} };
+    $('voiceSelect').onchange = (e) => { try { localStorage.setItem('mafy_voice', e.target.value); } catch {} };
     $('testVoice').onclick = () => enqueueTts({ text: 'Hola, así sonará tu chat.', voice: 'browser', rate: 1, volume: 1 });
 
     // ----- TTS en cola (baja la música mientras habla) -----

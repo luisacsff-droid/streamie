@@ -55,8 +55,8 @@
       { path: 'alerts.share.enabled', type: 'switch', label: 'Alertas al compartir' },
       { path: 'alerts.share.template', type: 'text', label: 'Texto al compartir', lock: proLocked((p) => p.alerts.customTemplates) },
       { group: 'Estilo propio' },
-      { path: 'alerts.soundUrl', type: 'text', label: 'Sonido (link https a .mp3)', placeholder: 'https://…/sonido.mp3', lock: proLocked((p) => p.alerts.customSound) },
-      { path: 'alerts.imageUrl', type: 'text', label: 'Imagen o GIF (link https)', placeholder: 'https://…/alerta.gif', lock: proLocked((p) => p.alerts.customImage) },
+      { path: 'alerts.soundId', type: 'media', kind: 'audio', label: 'Sonido para todas las alertas', hint: 'Para un sonido distinto por regalo usa la pestaña Regalos.', lock: proLocked((p) => p.alerts.customSound) },
+      { path: 'alerts.imageId', type: 'media', kind: 'image', label: 'Imagen o GIF para todas las alertas', lock: proLocked((p) => p.alerts.customImage) },
     ],
     tts: [
       { group: 'Qué se lee' },
@@ -173,6 +173,10 @@
       input.value = value;
       control.append(input);
       input.addEventListener('change', () => save(f.path, input.value));
+    } else if (f.type === 'media') {
+      input = mediaSelect(f.kind, value, (v) => save(f.path, v));
+      input.id = id;
+      control.append(input);
     } else if (f.type === 'list') {
       input = document.createElement('textarea');
       input.id = id;
@@ -335,8 +339,278 @@
   $('pauseBtn').addEventListener('click', () => songAction(songsState.paused ? 'resume' : 'pause'));
   $('clearBtn').addEventListener('click', () => confirm('¿Vaciar la cola de canciones?') && songAction('clear'));
 
+  // ---------- archivos subidos ----------
+  let mediaList = [];
+  let giftsSeen = [];
+  const KIND_LABEL = { audio: 'sonido', image: 'imagen' };
+  const ACCEPT = { audio: 'audio/*,.mp3,.wav,.ogg,.m4a', image: 'image/png,image/jpeg,image/gif,image/webp' };
+  const newId = () => Math.random().toString(36).slice(2, 10);
+  const fmtSize = (b) => (b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB');
+
+  function pickFile(kind) {
+    return new Promise((resolve) => {
+      const inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = ACCEPT[kind];
+      inp.onchange = () => resolve(inp.files[0] || null);
+      inp.click();
+    });
+  }
+
+  async function uploadFile(kind) {
+    const file = await pickFile(kind);
+    if (!file) return null;
+    const type = file.type && file.type.startsWith(kind + '/') ? file.type : kind === 'audio' ? 'audio/mpeg' : 'image/png';
+    toast('Subiendo ' + file.name + '…');
+    const res = await fetch('/api/media', {
+      method: 'POST',
+      headers: { 'Content-Type': type, 'X-Filename': encodeURIComponent(file.name) },
+      body: file,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se pudo subir el archivo.');
+    if (data.kind !== kind) toast(`Se subió, pero es una ${KIND_LABEL[data.kind]}, no un ${KIND_LABEL[kind]}.`, true);
+    else toast('Archivo subido');
+    mediaList.unshift(data);
+    renderMediaLibrary();
+    return data;
+  }
+
+  // Selector de archivo con la opción de subir uno nuevo ahí mismo.
+  function mediaSelect(kind, value, onChange) {
+    const sel = document.createElement('select');
+    const fill = (v) => {
+      sel.innerHTML = '';
+      sel.append(new Option(kind === 'audio' ? 'Sonido normal' : 'Sin imagen', ''));
+      for (const m of mediaList.filter((x) => x.kind === kind)) sel.append(new Option(m.name, m.id));
+      sel.append(new Option(kind === 'audio' ? '＋ Subir sonido…' : '＋ Subir imagen…', '__upload'));
+      sel.value = mediaList.some((m) => m.id === v) ? v : '';
+      sel.dataset.prev = sel.value;
+    };
+    fill(value);
+    sel.addEventListener('change', async () => {
+      if (sel.value !== '__upload') {
+        sel.dataset.prev = sel.value;
+        return onChange(sel.value);
+      }
+      try {
+        const m = await uploadFile(kind);
+        if (m && m.kind === kind) {
+          fill(m.id);
+          return onChange(m.id);
+        }
+      } catch (err) {
+        toast(err.message, true);
+      }
+      fill(sel.dataset.prev);
+    });
+    sel.dataset.mediaKind = kind;
+    return sel;
+  }
+
+  // Guarda una lista (regalos o eventos). Los cambios se mandan en orden y la lista local
+  // se conserva, porque las filas en pantalla editan esos mismos objetos.
+  let saveChain = Promise.resolve();
+  function saveList(key, list) {
+    saveChain = saveChain.then(async () => {
+      try {
+        const res = await api('/settings', 'PUT', { [key]: list });
+        res.settings[key] = list;
+        me = res;
+        toast('Guardado');
+        renderQuickEvents();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    return saveChain;
+  }
+
+  function limitNote(el, used, max, what) {
+    el.textContent = `${used} de ${max} ${what}` + (me.plan === 'free' ? ' en el plan Free.' : '.');
+  }
+
+  // ---------- sonidos por regalo ----------
+  function renderGiftSounds() {
+    const box = $('giftRules');
+    const rules = me.settings.giftSounds;
+    const max = me.planInfo.giftSounds;
+    limitNote($('giftLimit'), rules.length, max, 'regalos con sonido');
+    $('addGiftRule').disabled = rules.length >= max;
+    $('giftsSeenList').innerHTML = giftsSeen.map((g) => `<option value="${esc(g.name)}">${g.diamonds ? g.diamonds + ' 💎' : ''}</option>`).join('');
+    box.innerHTML = rules.length ? '' : '<p class="empty">Todavía no hay regalos con sonido propio.</p>';
+    for (const r of rules) {
+      const row = document.createElement('div');
+      row.className = 'rule';
+      row.innerHTML = `
+        <label class="r-gift"><span>Regalo</span><input list="giftsSeenList" placeholder="Ej: Rose" value="${esc(r.giftName)}"></label>
+        <label class="r-sound"><span>Sonido</span></label>
+        <label class="r-image"><span>Imagen (opcional)</span></label>
+        <label class="r-text"><span>Texto (opcional)</span><input placeholder="${esc(me.settings.alerts.gift.template)}" value="${esc(r.text)}"></label>
+        <div class="r-acts"><button class="sm" data-act="test">Probar</button><button class="sm ghost danger" data-act="remove" aria-label="Quitar regalo">Quitar</button></div>`;
+      const [giftIn] = row.querySelectorAll('.r-gift input');
+      const textIn = row.querySelector('.r-text input');
+      const commit = () => saveList('giftSounds', me.settings.giftSounds);
+      giftIn.addEventListener('change', () => {
+        const seen = giftsSeen.find((g) => g.name.toLowerCase() === giftIn.value.trim().toLowerCase());
+        r.giftName = giftIn.value.trim();
+        r.giftId = seen?.id || '';
+        r.giftImage = seen?.image || '';
+        commit();
+      });
+      textIn.addEventListener('change', () => {
+        r.text = textIn.value;
+        commit();
+      });
+      row.querySelector('.r-sound').append(mediaSelect('audio', r.soundId, (v) => ((r.soundId = v), commit())));
+      row.querySelector('.r-image').append(mediaSelect('image', r.imageId, (v) => ((r.imageId = v), commit())));
+      row.querySelector('[data-act=test]').addEventListener('click', () => {
+        if (!r.giftName) return toast('Primero escribe el nombre del regalo.', true);
+        post('/test/gift', { giftName: r.giftName, giftId: r.giftId }).catch((e) => toast(e.message, true));
+      });
+      row.querySelector('[data-act=remove]').addEventListener('click', () => {
+        me.settings.giftSounds = me.settings.giftSounds.filter((x) => x !== r);
+        commit();
+        renderGiftSounds();
+      });
+      box.append(row);
+    }
+  }
+
+  $('addGiftRule').addEventListener('click', () => {
+    me.settings.giftSounds.push({ id: newId(), giftId: '', giftName: '', giftImage: '', soundId: '', imageId: '', text: '' });
+    renderGiftSounds();
+    $('giftRules').lastElementChild.querySelector('input').focus();
+  });
+
+  // ---------- eventos manuales ----------
+  function renderEvents() {
+    const box = $('eventList');
+    const list = me.settings.events;
+    const max = me.planInfo.events;
+    limitNote($('eventLimit'), list.length, max, 'eventos');
+    $('addEvent').disabled = list.length >= max;
+    box.innerHTML = list.length ? '' : '<p class="empty">Crea tu primer evento, por ejemplo “Capibara”.</p>';
+    for (const ev of list) {
+      const row = document.createElement('div');
+      row.className = 'rule';
+      row.innerHTML = `
+        <label class="r-emoji"><span>Emoji</span><input maxlength="8" value="${esc(ev.emoji)}" placeholder="🦫"></label>
+        <label class="r-gift"><span>Nombre del botón</span><input maxlength="40" value="${esc(ev.name)}" placeholder="Capibara"></label>
+        <label class="r-sound"><span>Sonido</span></label>
+        <label class="r-image"><span>Imagen o GIF</span></label>
+        <label class="r-text"><span>Texto en pantalla</span><input maxlength="120" value="${esc(ev.text)}" placeholder="{user} mandó un capibara"></label>
+        <div class="r-acts"><button class="sm" data-act="test">Probar</button><button class="sm ghost danger" data-act="remove">Quitar</button></div>`;
+      const commit = () => saveList('events', me.settings.events);
+      const [emojiIn, nameIn, textIn] = [row.querySelector('.r-emoji input'), row.querySelector('.r-gift input'), row.querySelector('.r-text input')];
+      emojiIn.addEventListener('change', () => ((ev.emoji = emojiIn.value.trim()), commit()));
+      nameIn.addEventListener('change', () => ((ev.name = nameIn.value.trim() || 'Evento'), commit()));
+      textIn.addEventListener('change', () => ((ev.text = textIn.value), commit()));
+      row.querySelector('.r-sound').append(mediaSelect('audio', ev.soundId, (v) => ((ev.soundId = v), commit())));
+      row.querySelector('.r-image').append(mediaSelect('image', ev.imageId, (v) => ((ev.imageId = v), commit())));
+      row.querySelector('[data-act=test]').addEventListener('click', () => fireEvent(ev.id, 'viewer_prueba'));
+      row.querySelector('[data-act=remove]').addEventListener('click', () => {
+        me.settings.events = me.settings.events.filter((x) => x !== ev);
+        commit();
+        renderEvents();
+      });
+      box.append(row);
+    }
+  }
+
+  $('addEvent').addEventListener('click', async () => {
+    me.settings.events.push({ id: newId(), name: 'Nuevo evento', emoji: '✨', text: '{user} ', soundId: '', imageId: '' });
+    await saveList('events', me.settings.events);
+    renderEvents();
+    $('eventList').lastElementChild.querySelector('.r-gift input').select();
+  });
+
+  async function fireEvent(id, user) {
+    try {
+      await post(`/events/${encodeURIComponent(id)}/fire`, { user });
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  // Botonera rápida en la columna derecha.
+  function renderQuickEvents() {
+    const box = $('quickEvents');
+    const list = me.settings.events;
+    box.innerHTML = list.length ? '' : '<p class="empty">Crea eventos en la pestaña Eventos y aparecerán aquí como botones.</p>';
+    for (const ev of list) {
+      const b = document.createElement('button');
+      b.className = 'event-btn';
+      b.innerHTML = `<span class="e-emoji">${esc(ev.emoji || '✨')}</span>${esc(ev.name)}`;
+      b.addEventListener('click', () => fireEvent(ev.id, $('eventUser').value.trim()));
+      box.append(b);
+    }
+  }
+
+  // ---------- biblioteca de archivos ----------
+  function renderMediaLibrary() {
+    const max = me.planInfo.media.maxFiles;
+    $('mediaLimit').textContent = `${mediaList.length} de ${max} archivos · máximo ${Math.round(me.planInfo.media.maxBytes / 1e6)} MB cada uno.`;
+    const box = $('mediaList');
+    box.innerHTML = mediaList.length ? '' : '<li class="empty">Aún no subes archivos. Sube sonidos MP3 o imágenes y GIFs.</li>';
+    for (const m of mediaList) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="m-kind">${m.kind === 'audio' ? '🔊' : '🖼️'}</span><span class="m-name" title="${esc(m.name)}">${esc(m.name)}</span><span class="small muted">${fmtSize(m.size)}</span>
+        <button class="sm ghost" data-act="preview">${m.kind === 'audio' ? 'Escuchar' : 'Ver'}</button><button class="sm ghost danger" data-act="remove">Borrar</button>`;
+      li.querySelector('[data-act=preview]').addEventListener('click', () => {
+        if (m.kind === 'audio') new Audio(m.url).play().catch(() => toast('No se pudo reproducir.', true));
+        else window.open(m.url, '_blank', 'noopener');
+      });
+      li.querySelector('[data-act=remove]').addEventListener('click', async () => {
+        if (!confirm(`¿Borrar “${m.name}”? Se quitará de los regalos y eventos que lo usen.`)) return;
+        try {
+          me = await api('/media/' + encodeURIComponent(m.id), 'DELETE', {});
+          mediaList = mediaList.filter((x) => x.id !== m.id);
+          renderAllLists();
+          toast('Archivo borrado');
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+      box.append(li);
+    }
+    // Actualiza los selectores abiertos para que incluyan el archivo nuevo.
+    document.querySelectorAll('select[data-media-kind]').forEach((sel) => {
+      const v = sel.value;
+      const kind = sel.dataset.mediaKind;
+      const known = new Set([...sel.options].map((o) => o.value));
+      for (const m of mediaList.filter((x) => x.kind === kind && !known.has(x.id))) {
+        sel.insertBefore(new Option(m.name, m.id), sel.lastElementChild);
+      }
+      sel.value = v;
+    });
+  }
+
+  $('uploadSound').addEventListener('click', () => uploadFile('audio').catch((e) => toast(e.message, true)));
+  $('uploadImage').addEventListener('click', () => uploadFile('image').catch((e) => toast(e.message, true)));
+
+  function renderAllLists() {
+    renderFields();
+    renderGiftSounds();
+    renderEvents();
+    renderQuickEvents();
+    renderMediaLibrary();
+  }
+
+  // Personas recientes del chat, para el campo "para quién" de los eventos.
+  const recentUsers = [];
+  function rememberUser(name) {
+    if (!name) return;
+    const i = recentUsers.indexOf(name);
+    if (i >= 0) recentUsers.splice(i, 1);
+    recentUsers.unshift(name);
+    recentUsers.length = Math.min(recentUsers.length, 20);
+    $('recentUsers').innerHTML = recentUsers.map((n) => `<option value="${esc(n)}"></option>`).join('');
+  }
+
   // ---------- registro de actividad ----------
   function addLog(entry, prepend = true) {
+    if (prepend) rememberUser(entry.user);
     const li = document.createElement('li');
     const t = new Date(entry.at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
     li.innerHTML = `<time>${t}</time><span class="${esc(entry.kind)}">${esc(entry.text)}</span>`;
@@ -348,6 +622,7 @@
 
   // ---------- tiempo real ----------
   let wsRetry;
+  let giftsTimer;
   function connectWs() {
     clearTimeout(wsRetry);
     if (ws) {
@@ -358,7 +633,17 @@
     ws = new WebSocket(`${proto}://${location.host}/ws?k=${encodeURIComponent(me.overlayKey)}&role=dashboard`);
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
-      if (msg.type === 'log') addLog(msg.entry);
+      if (msg.type === 'log') {
+        addLog(msg.entry);
+        // Un regalo nuevo puede ser uno que aún no estaba en la lista para asignar sonidos.
+        if (msg.entry.kind === 'gift') {
+          clearTimeout(giftsTimer);
+          giftsTimer = setTimeout(async () => {
+            giftsSeen = await api('/gifts-seen').catch(() => giftsSeen);
+            $('giftsSeenList').innerHTML = giftsSeen.map((g) => `<option value="${esc(g.name)}">${g.diamonds ? g.diamonds + ' 💎' : ''}</option>`).join('');
+          }, 3000);
+        }
+      }
       else if (msg.type === 'live:status') {
         renderStatus(msg);
         if (msg.status === 'offline') refreshMe();
@@ -373,7 +658,7 @@
   async function refreshMe(rerender = false) {
     me = await api('/me');
     renderHeader();
-    if (rerender) renderFields();
+    if (rerender) renderAllLists();
   }
 
   // ---------- pagos y sesión ----------
@@ -399,13 +684,15 @@
   // ---------- inicio ----------
   (async () => {
     me = await api('/me');
+    [mediaList, giftsSeen] = await Promise.all([api('/media'), api('/gifts-seen')]);
     renderHeader();
-    renderFields();
+    renderAllLists();
     renderStatus(me.live);
     renderSongs();
     const log = await api('/log');
     if (!log.length) $('log').innerHTML = '<li class="empty">Aquí verás regalos, mensajes y canciones en cuanto pasen.</li>';
     log.forEach((e) => addLog(e, false));
+    [...log].reverse().forEach((e) => rememberUser(e.user));
     connectWs();
     const q = new URLSearchParams(location.search).get('pago');
     if (q === 'ok') toast('¡Listo! Tu plan Pro se activa en unos segundos.');

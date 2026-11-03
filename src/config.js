@@ -10,10 +10,10 @@ try {
 const env = process.env;
 
 const config = {
-  appName: env.APP_NAME || 'Streamie',
+  appName: env.APP_NAME || 'Mafy',
   port: Number(env.PORT || 3000),
   baseUrl: (env.BASE_URL || `http://localhost:${env.PORT || 3000}`).replace(/\/$/, ''),
-  dbPath: env.DB_PATH || path.join(__dirname, '..', 'data', 'streamie.db'),
+  dbPath: env.DB_PATH || path.join(__dirname, '..', 'data', 'mafy.db'),
   isProd: env.NODE_ENV === 'production',
 
   // EulerStream: firma de la conexión al LIVE

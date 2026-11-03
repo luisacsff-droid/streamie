@@ -1,4 +1,4 @@
-# Streamie
+# Mafy
 
 Web app para streamers de TikTok LIVE con **alertas**, **lectura del chat (TTS)** y **song request**, con planes Free y Pro.
 
@@ -11,6 +11,9 @@ El streamer crea su cuenta, escribe su usuario de TikTok, pega tres links en OBS
 | | Free | Pro |
 |---|---|---|
 | Alertas de regalos, follows y shares | ✅ textos fijos | ✅ textos, sonido e imagen propios |
+| Sonido propio por regalo | 5 regalos | 50 regalos |
+| Eventos manuales (alertas que disparas con un botón) | 3 | 30 |
+| Archivos subidos (sonidos, imágenes, GIFs) | 10 de hasta 1 MB | 100 de hasta 5 MB |
 | TTS (leer el chat) | voz del navegador, 100 letras | voces naturales (Google), 300 letras, modo “solo quien regaló” |
 | Song request (`!sr`) | cola de 5, siempre con aprobación | cola de 50, aprobación opcional, regalos que adelantan canciones |
 | Horas de LIVE al mes | 20 | 300 (uso justo) |
@@ -34,7 +37,7 @@ TikTok LIVE ──(EulerStream firma la conexión)──► servidor Node.js
 - `src/modules/` — lógica de alertas, TTS y song request.
 - `src/hub.js` — WebSocket hacia los overlays y el panel.
 - `public/` — landing, panel y overlays (HTML/CSS/JS sin framework).
-- Base de datos SQLite en un solo archivo (`data/streamie.db`).
+- Base de datos SQLite en un solo archivo (`data/mafy.db`).
 
 ## Correrlo en tu computadora
 
@@ -72,7 +75,7 @@ Netlify/Vercel **no sirven** para el servidor: necesita mantener conexiones abie
 3. Agrega un **Volume** montado en `/data`.
 4. En *Variables* pon todo lo de `.env.example`, con:
    - `NODE_ENV=production`
-   - `DB_PATH=/data/streamie.db`
+   - `DB_PATH=/data/mafy.db`
    - `BASE_URL=https://tu-app.up.railway.app` (o tu dominio)
 5. Railway detecta `npm start` solo. Revisa que `https://tu-dominio/health` responda `{"ok":true}`.
 

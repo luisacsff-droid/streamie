@@ -25,6 +25,9 @@ const PLANS = {
       customSound: false,
       customImage: false,
     },
+    giftSounds: 5, // reglas "regalo → sonido"
+    events: 3, // alertas que el streamer dispara a mano
+    media: { maxFiles: 10, maxBytes: 1_000_000 }, // archivos subidos (sonidos e imágenes)
     songs: {
       maxQueue: 5,
       forceApproval: true,
@@ -47,6 +50,9 @@ const PLANS = {
       customSound: true,
       customImage: true,
     },
+    giftSounds: 50,
+    events: 30,
+    media: { maxFiles: 100, maxBytes: 5_000_000 },
     songs: {
       maxQueue: 50,
       forceApproval: false,

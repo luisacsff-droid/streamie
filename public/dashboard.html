@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Panel · Streamie</title>
+  <title>Panel · Mafy</title>
+  <link rel="icon" type="image/png" href="/img/favicon.png">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/dashboard.css">
 </head>
 <body>
   <header class="top">
     <div class="brand">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffb547" d="M12 1l2.6 7.4L22 11l-7.4 2.6L12 21l-2.6-7.4L2 11l7.4-2.6z"/></svg>
-      <span id="appName">Streamie</span>
+      <img src="/img/mafy-icon.webp" alt="" width="30" height="30">
+      <span id="appName">Mafy</span>
     </div>
     <div class="top-right">
       <div class="usage" title="Horas de conexión al LIVE este mes">
@@ -44,8 +45,11 @@
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="overlays" aria-selected="true">Overlays</button>
         <button role="tab" data-tab="alerts" aria-selected="false">Alertas</button>
+        <button role="tab" data-tab="gifts" aria-selected="false">Regalos</button>
+        <button role="tab" data-tab="events" aria-selected="false">Eventos</button>
         <button role="tab" data-tab="tts" aria-selected="false">Voz</button>
         <button role="tab" data-tab="songs" aria-selected="false">Canciones</button>
+        <button role="tab" data-tab="media" aria-selected="false">Archivos</button>
       </nav>
 
       <div class="tab-panel" data-panel="overlays">
@@ -74,6 +78,22 @@
         <p class="small muted rotate">¿Alguien más tiene tus links? <button id="rotateBtn" class="ghost sm danger">Generar links nuevos</button></p>
       </div>
       <div class="tab-panel" data-panel="alerts" hidden><div class="fields" data-section="alerts"></div></div>
+      <div class="tab-panel" data-panel="gifts" hidden>
+        <p class="muted intro">Cuando alguien mande uno de estos regalos sonará su propio sonido. Los regalos que te manden en tus LIVEs aparecen como sugerencias al escribir; también puedes escribir el nombre tal como sale en Actividad.</p>
+        <div class="list-head"><span id="giftLimit" class="small muted"></span><button id="addGiftRule" class="primary sm">Agregar regalo</button></div>
+        <datalist id="giftsSeenList"></datalist>
+        <div id="giftRules" class="rules"></div>
+      </div>
+      <div class="tab-panel" data-panel="events" hidden>
+        <p class="muted intro">Alertas que tú disparas con un botón, por ejemplo cuando alguien dice o hace algo especial. Usa <b>{user}</b> en el texto para poner el nombre de la persona.</p>
+        <div class="list-head"><span id="eventLimit" class="small muted"></span><button id="addEvent" class="primary sm">Crear evento</button></div>
+        <div id="eventList" class="rules"></div>
+      </div>
+      <div class="tab-panel" data-panel="media" hidden>
+        <p class="muted intro">Sonidos e imágenes que puedes usar en regalos, eventos y alertas.</p>
+        <div class="list-head"><span id="mediaLimit" class="small muted"></span><span class="upload-btns"><button id="uploadSound" class="sm">Subir sonido</button><button id="uploadImage" class="sm">Subir imagen o GIF</button></span></div>
+        <ul id="mediaList" class="media-list"></ul>
+      </div>
       <div class="tab-panel" data-panel="tts" hidden><div class="fields" data-section="tts"></div></div>
       <div class="tab-panel" data-panel="songs" hidden><div class="fields" data-section="songs"></div></div>
     </section>
@@ -92,6 +112,13 @@
           <input name="comment" placeholder="Mensaje o !sr canción" aria-label="Mensaje de prueba" required>
           <button class="sm" type="submit">Enviar</button>
         </form>
+      </section>
+
+      <section class="box" aria-labelledby="eventsTitle">
+        <h2 id="eventsTitle">Eventos</h2>
+        <label class="event-user"><span class="small muted">Para quién (opcional)</span><input id="eventUser" list="recentUsers" placeholder="nombre del viewer" autocomplete="off"></label>
+        <datalist id="recentUsers"></datalist>
+        <div id="quickEvents" class="quick-events"></div>
       </section>
 
       <section class="box" aria-labelledby="queueTitle">

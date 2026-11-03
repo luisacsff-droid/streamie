@@ -29,6 +29,27 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   expires_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS media (
+  id         TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,
+  mime       TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  size       INTEGER NOT NULL,
+  data       BLOB NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS media_user ON media(user_id);
+CREATE TABLE IF NOT EXISTS gifts_seen (
+  user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  gift_key TEXT NOT NULL,
+  gift_id  TEXT NOT NULL DEFAULT '',
+  name     TEXT NOT NULL,
+  image    TEXT NOT NULL DEFAULT '',
+  diamonds INTEGER NOT NULL DEFAULT 0,
+  last_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, gift_key)
+);
 CREATE TABLE IF NOT EXISTS usage (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   month   TEXT NOT NULL,
@@ -62,6 +83,22 @@ const stmts = {
   addUsage: db.prepare(`INSERT INTO usage (user_id, month, seconds) VALUES (?, ?, ?)
     ON CONFLICT(user_id, month) DO UPDATE SET seconds = seconds + excluded.seconds`),
   getUsage: db.prepare('SELECT seconds FROM usage WHERE user_id = ? AND month = ?'),
+  insertMedia: db.prepare(
+    'INSERT INTO media (id, user_id, kind, mime, name, size, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ),
+  listMedia: db.prepare(
+    'SELECT id, kind, mime, name, size, created_at FROM media WHERE user_id = ? ORDER BY created_at DESC'
+  ),
+  countMedia: db.prepare('SELECT COUNT(*) AS n FROM media WHERE user_id = ?'),
+  getMedia: db.prepare('SELECT id, user_id, kind, mime, size, data FROM media WHERE id = ?'),
+  deleteMedia: db.prepare('DELETE FROM media WHERE id = ? AND user_id = ?'),
+  upsertGift: db.prepare(`INSERT INTO gifts_seen (user_id, gift_key, gift_id, name, image, diamonds, last_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, gift_key) DO UPDATE SET name = excluded.name, image = excluded.image,
+      diamonds = excluded.diamonds, last_at = excluded.last_at`),
+  listGifts: db.prepare(
+    'SELECT gift_id AS id, name, image, diamonds FROM gifts_seen WHERE user_id = ? ORDER BY last_at DESC LIMIT 150'
+  ),
 };
 
 // Convierte la fila de la BD en el objeto que usa la app.
@@ -112,4 +149,22 @@ module.exports = {
   purgeSessions: () => stmts.purgeSessions.run(Date.now()),
   addUsage: (userId, seconds) => stmts.addUsage.run(userId, monthKey(), Math.round(seconds)),
   getUsageSeconds: (userId) => stmts.getUsage.get(userId, monthKey())?.seconds || 0,
+
+  // Archivos subidos (sonidos e imágenes)
+  addMedia(userId, { kind, mime, name, data }) {
+    const id = crypto.randomBytes(16).toString('base64url');
+    stmts.insertMedia.run(id, userId, kind, mime, name, data.length, data, Date.now());
+    return id;
+  },
+  listMedia: (userId) => stmts.listMedia.all(userId),
+  countMedia: (userId) => stmts.countMedia.get(userId).n,
+  getMedia: (id) => stmts.getMedia.get(id),
+  deleteMedia: (id, userId) => stmts.deleteMedia.run(id, userId).changes > 0,
+
+  // Regalos que el streamer ha recibido (para elegirlos al asignar sonidos)
+  rememberGift(userId, g) {
+    const key = g.id ? `id:${g.id}` : `name:${String(g.name).toLowerCase()}`;
+    stmts.upsertGift.run(userId, key, String(g.id || ''), String(g.name || 'regalo').slice(0, 60), g.image || '', g.diamonds || 0, Date.now());
+  },
+  listGifts: (userId) => stmts.listGifts.all(userId),
 };

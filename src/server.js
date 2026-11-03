@@ -15,6 +15,7 @@ const billing = require('./billing');
 const pipeline = require('./pipeline');
 const songs = require('./modules/songs');
 const { normalizeSettings } = require('./settings');
+const media = require('./media');
 const { getPlan, PLANS, PREMIUM_VOICES } = require('./plans');
 
 const app = express();
@@ -22,7 +23,7 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
-const COOKIE = 'streamie_session';
+const COOKIE = 'mafy_session';
 
 // ---------- utilidades ----------
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -119,7 +120,9 @@ app.use(cookieParser());
 
 // Las API que cambian datos solo aceptan JSON (protección básica contra CSRF junto con SameSite).
 app.use('/api', (req, res, next) => {
-  if (req.method !== 'GET' && !req.is('application/json')) {
+  // Excepción: subir archivos manda el audio/imagen tal cual (el navegador exige permiso previo para eso).
+  const isUpload = req.method === 'POST' && req.path === '/media' && (req.is('audio/*') || req.is('image/*'));
+  if (req.method !== 'GET' && !isUpload && !req.is('application/json')) {
     return res.status(415).json({ error: 'Se esperaba JSON.' });
   }
   next();
@@ -240,13 +243,83 @@ app.post(
       event.comment = String(req.body.comment || '¡Hola desde la prueba!').slice(0, 300);
     }
     if (kind === 'gift') {
-      const g = pick(FAKE_GIFTS);
-      event.gift = { id: 0, name: g.name, image: '', diamonds: g.diamonds, count: 1 + crypto.randomInt(5) };
+      // Se puede probar un regalo concreto (para escuchar su sonido) o uno al azar.
+      const g = req.body.giftName ? { name: String(req.body.giftName).slice(0, 60), diamonds: 1 } : pick(FAKE_GIFTS);
+      event.gift = {
+        id: String(req.body.giftId || '').replace(/[^0-9]/g, ''),
+        name: g.name,
+        image: '',
+        diamonds: Number(req.body.diamonds) || g.diamonds,
+        count: req.body.giftName ? 1 : 1 + crypto.randomInt(5),
+      };
     }
     await pipeline.handleEvent(req.user.id, event);
     res.json({ ok: true });
   })
 );
+
+// ---------- eventos manuales ----------
+app.post(
+  '/api/events/:id/fire',
+  auth,
+  wrap(async (req, res) => {
+    const ok = await pipeline.fireEvent(req.user.id, String(req.params.id), String(req.body.user || '').slice(0, 40));
+    if (!ok) throw new HttpError(404, 'Ese evento ya no existe.');
+    res.json({ ok: true });
+  })
+);
+
+// ---------- regalos recibidos ----------
+app.get('/api/gifts-seen', auth, (req, res) => res.json(db.listGifts(req.user.id)));
+
+// ---------- archivos (sonidos e imágenes) ----------
+const mediaView = (m) => ({ id: m.id, kind: m.kind, name: m.name, size: m.size, url: media.mediaUrl(m.id) });
+
+app.get('/api/media', auth, (req, res) => res.json(db.listMedia(req.user.id).map(mediaView)));
+
+app.post(
+  '/api/media',
+  auth,
+  express.raw({ type: ['audio/*', 'image/*'], limit: '5mb' }),
+  (req, res) => {
+    const plan = getPlan(req.user.plan);
+    const data = req.body;
+    if (!Buffer.isBuffer(data) || !data.length) throw new HttpError(400, 'No llegó ningún archivo.');
+    if (data.length > plan.media.maxBytes) {
+      throw new HttpError(413, `El archivo pesa más de ${Math.round(plan.media.maxBytes / 1e6)} MB, el máximo de tu plan.`);
+    }
+    if (db.countMedia(req.user.id) >= plan.media.maxFiles) {
+      throw new HttpError(400, `Ya tienes ${plan.media.maxFiles} archivos, el máximo de tu plan. Borra alguno para subir otro.`);
+    }
+    const type = media.detect(data);
+    if (!type) throw new HttpError(400, 'Formato no permitido. Usa MP3, WAV, OGG o M4A para sonidos, y PNG, JPG, GIF o WEBP para imágenes.');
+    let name = 'archivo';
+    try {
+      name = decodeURIComponent(req.get('x-filename') || 'archivo');
+    } catch {
+      /* nombre inválido: se usa el genérico */
+    }
+    const id = db.addMedia(req.user.id, { ...type, name: media.cleanName(name), data });
+    res.json(mediaView({ id, kind: type.kind, name: media.cleanName(name), size: data.length }));
+  }
+);
+
+app.delete('/api/media/:id', auth, (req, res) => {
+  const id = String(req.params.id);
+  if (!db.deleteMedia(id, req.user.id)) throw new HttpError(404, 'Ese archivo no existe.');
+  // Quita el archivo de donde se estaba usando.
+  const s = structuredClone(req.user.settings);
+  const strip = (o) => {
+    if (o.soundId === id) o.soundId = '';
+    if (o.imageId === id) o.imageId = '';
+  };
+  strip(s.alerts);
+  s.giftSounds.forEach(strip);
+  s.events.forEach(strip);
+  db.saveSettings(req.user.id, normalizeSettings(s, req.user.plan));
+  pipeline.pushConfig(req.user.id);
+  res.json(me(db.getUser(req.user.id)));
+});
 
 // ---------- canciones ----------
 app.get('/api/songs', auth, (req, res) => res.json(songs.snapshot(req.user.id)));
@@ -289,6 +362,20 @@ app.post('/api/admin/plan', auth, (req, res) => {
 });
 
 // ---------- páginas ----------
+// Archivos subidos: públicos por su id largo y aleatorio (los overlays los necesitan sin sesión).
+app.get('/media/:id', (req, res) => {
+  const m = db.getMedia(String(req.params.id));
+  if (!m) return res.status(404).end();
+  res.set({
+    'Content-Type': m.mime,
+    'Content-Length': m.size,
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'",
+  });
+  res.end(m.data);
+});
+
 app.get('/health', (req, res) => res.json({ ok: true, live: live.activeCount() }));
 app.get('/app', (req, res) => res.sendFile(path.join(PUBLIC, 'dashboard.html')));
 app.get('/o/alerts', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-alerts.html')));
@@ -301,7 +388,8 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'No encontrado.' }))
 app.use((err, req, res, next) => {
   const status = err.status || (err.type === 'entity.parse.failed' ? 400 : 500);
   if (status >= 500) console.error(err);
-  res.status(status).json({ error: status >= 500 ? 'Error interno.' : err.message });
+  const message = err.type === 'entity.too.large' ? 'El archivo es demasiado grande.' : err.message;
+  res.status(status).json({ error: status >= 500 ? 'Error interno.' : message });
 });
 
 // ---------- WebSocket ----------

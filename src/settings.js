@@ -10,9 +10,15 @@ const DEFAULTS = {
     gift: { enabled: true, minDiamonds: 1, template: '{user} envió {count}x {gift}' },
     follow: { enabled: true, template: '{user} empezó a seguirte' },
     share: { enabled: true, template: '{user} compartió el LIVE' },
-    soundUrl: '', // Pro
-    imageUrl: '', // Pro
+    soundId: '', // Pro: sonido subido para todas las alertas
+    imageId: '', // Pro: imagen o GIF subido para todas las alertas
   },
+  // Reglas: cuando llega cierto regalo, suena su propio sonido.
+  // { id, giftId, giftName, giftImage, soundId, imageId, text }
+  giftSounds: [],
+  // Alertas propias que el streamer dispara con un botón.
+  // { id, name, emoji, text, soundId, imageId }
+  events: [],
   tts: {
     enabled: true,
     mode: 'all', // all | command | gifters
@@ -56,7 +62,9 @@ function deepMerge(base, extra) {
 
 const clamp = (n, min, max) => Math.min(max, Math.max(min, Number(n) || 0));
 const str = (s, max) => String(s ?? '').slice(0, max);
-const safeUrl = (u) => (/^https:\/\/[^\s"'<>]+$/i.test(u || '') ? u.slice(0, 500) : '');
+const mediaId = (id) => (/^[A-Za-z0-9_-]{16,40}$/.test(id || '') ? id : '');
+const itemId = (id) => (/^[A-Za-z0-9_-]{4,40}$/.test(id || '') ? id : Math.random().toString(36).slice(2, 10));
+const list = (v) => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object') : []);
 
 // Devuelve configuración completa, válida y recortada a lo que permite el plan.
 function normalizeSettings(raw, planId) {
@@ -71,8 +79,33 @@ function normalizeSettings(raw, planId) {
   for (const k of ['gift', 'follow', 'share']) {
     a[k].template = plan.alerts.customTemplates ? str(a[k].template, 120) : DEFAULTS.alerts[k].template;
   }
-  a.soundUrl = plan.alerts.customSound ? safeUrl(a.soundUrl) : '';
-  a.imageUrl = plan.alerts.customImage ? safeUrl(a.imageUrl) : '';
+  a.soundId = plan.alerts.customSound ? mediaId(a.soundId) : '';
+  a.imageId = plan.alerts.customImage ? mediaId(a.imageId) : '';
+
+  // Sonidos por regalo
+  s.giftSounds = list(s.giftSounds)
+    .slice(0, plan.giftSounds)
+    .map((r) => ({
+      id: itemId(r.id),
+      giftId: str(r.giftId, 30).replace(/[^0-9]/g, ''),
+      giftName: str(r.giftName, 60).trim(),
+      giftImage: /^https:\/\/[^\s"'<>]+$/i.test(r.giftImage || '') ? str(r.giftImage, 500) : '',
+      soundId: mediaId(r.soundId),
+      imageId: mediaId(r.imageId),
+      text: str(r.text, 120),
+    }));
+
+  // Eventos manuales
+  s.events = list(s.events)
+    .slice(0, plan.events)
+    .map((e) => ({
+      id: itemId(e.id),
+      name: str(e.name, 40).trim() || 'Evento',
+      emoji: str(e.emoji, 8).trim(),
+      text: str(e.text, 120),
+      soundId: mediaId(e.soundId),
+      imageId: mediaId(e.imageId),
+    }));
 
   // TTS
   const t = s.tts;

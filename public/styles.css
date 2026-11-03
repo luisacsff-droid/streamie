@@ -1,17 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Onest:wght@400;500;600&display=swap');
 
 :root {
-  --night: #17112a;
-  --panel: #221a3b;
-  --panel-2: #2c2350;
-  --line: #3a2f66;
-  --text: #f4efff;
-  --muted: #a99fcb;
-  --spark: #ffb547;
-  --spark-ink: #2a1a00;
-  --live: #3ddc97;
-  --wait: #ffb547;
-  --err: #ff6b7a;
+  --night: #000000;
+  --panel: #0d0f0a;
+  --panel-2: #171a12;
+  --line: #2a3020;
+  --text: #f2f7ea;
+  --muted: #98a28a;
+  --spark: #b6ff1f;
+  --spark-hover: #ccff5c;
+  --spark-ink: #0a1200;
+  --live: #b6ff1f;
+  --wait: #ffcc33;
+  --err: #ff5470;
   --radius-lg: 18px;
   --radius-sm: 10px;
   --display: 'Bricolage Grotesque', system-ui, sans-serif;
@@ -22,7 +23,7 @@
 html, body { margin: 0; }
 body {
   background:
-    radial-gradient(1200px 500px at 85% -10%, #3a1f5c 0%, transparent 60%),
+    radial-gradient(1000px 420px at 85% -12%, rgba(182, 255, 31, 0.10) 0%, transparent 60%),
     var(--night);
   color: var(--text);
   font: 15px/1.5 var(--body);
@@ -58,7 +59,7 @@ button, .btn {
 button:hover, .btn:hover { border-color: var(--muted); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .primary { background: var(--spark); color: var(--spark-ink); border-color: var(--spark); }
-.primary:hover { background: #ffc46b; border-color: #ffc46b; }
+.primary:hover { background: var(--spark-hover); border-color: var(--spark-hover); }
 .ghost { background: transparent; }
 .danger { color: var(--err); }
 .sm { padding: 5px 11px; font-size: 13px; }
@@ -78,7 +79,9 @@ input[type='checkbox'] { width: auto; }
 label { display: block; }
 
 .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: none; }
-.switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+/* El input invisible cubre todo el interruptor para que el clic lo active. */
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.switch input:disabled { cursor: not-allowed; }
 .switch span {
   position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background .15s;
 }
