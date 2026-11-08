@@ -39,6 +39,38 @@
   // ---------- esquema de configuración ----------
   const proLocked = (check) => (p) => !check(p);
   const SCHEMA = {
+    visualizer: [
+      {
+        path: 'visualizer.style', type: 'select', label: 'Estilo',
+        options: () => [
+          { value: 'bars', label: 'Barras' },
+          { value: 'mirror', label: 'Barras en espejo' },
+          { value: 'wave', label: 'Onda' },
+          { value: 'circle', label: 'Círculo' },
+          { value: 'dots', label: 'Puntos (ecualizador)' },
+        ],
+      },
+      {
+        path: 'visualizer.source', type: 'select', label: 'Fuente',
+        options: () => [
+          { value: 'demo', label: 'Decorativo (se mueve solo)' },
+          { value: 'audio', label: 'Audio real (dispositivo de grabación)' },
+        ],
+      },
+      { path: 'visualizer.device', type: 'text', label: 'Dispositivo (opcional)', placeholder: 'Ej: CABLE, BlackHole, Mezcla estéreo', hint: 'Solo para Audio real. Vacío = el predeterminado.' },
+      { path: 'visualizer.color', type: 'color', label: 'Color' },
+      { path: 'visualizer.color2', type: 'color', label: 'Segundo color (degradado)' },
+      { path: 'visualizer.bars', type: 'range', min: 16, max: 128, step: 8, label: 'Cantidad de barras', fmt: (v) => v },
+      { path: 'visualizer.sens', type: 'range', min: 0.3, max: 3, step: 0.1, label: 'Sensibilidad', fmt: (v) => Number(v).toFixed(1) + '×' },
+      {
+        path: 'visualizer.position', type: 'select', label: 'Posición de las barras',
+        options: () => [
+          { value: 'bottom', label: 'Abajo' },
+          { value: 'center', label: 'Al centro' },
+        ],
+      },
+      { path: 'visualizer.glow', type: 'switch', label: 'Brillo neón' },
+    ],
     alerts: [
       { group: 'General' },
       { path: 'alerts.enabled', type: 'switch', label: 'Mostrar alertas' },
@@ -173,6 +205,14 @@
       input.value = value;
       control.append(input);
       input.addEventListener('change', () => save(f.path, input.value));
+    } else if (f.type === 'color') {
+      input = document.createElement('input');
+      input.type = 'color';
+      input.id = id;
+      input.className = 'color-input';
+      input.value = value;
+      control.append(input);
+      input.addEventListener('change', () => save(f.path, input.value));
     } else if (f.type === 'media') {
       input = mediaSelect(f.kind, value, (v) => save(f.path, v));
       input.id = id;
@@ -196,9 +236,14 @@
     return row;
   }
 
+  function updateVizPreview() {
+    $('vizPreview').contentWindow?.postMessage({ type: 'visualizer-preview', cfg: me.settings.visualizer }, location.origin);
+  }
+
   async function save(path, value) {
     try {
       me = await api('/settings', 'PUT', buildPatch(path, value));
+      if (path.startsWith('visualizer.')) updateVizPreview();
       const stored = getPath(me.settings, path);
       if (JSON.stringify(stored) !== JSON.stringify(value)) {
         toast('Ajustado al límite de tu plan.');
@@ -227,6 +272,10 @@
     $('urlAlerts').value = me.overlays.alerts;
     $('urlPlayer').value = me.overlays.player;
     $('urlSongs').value = me.overlays.songs;
+    $('urlVisualizer').value = me.overlays.visualizer;
+    const prev = $('vizPreview');
+    if (!prev.src) prev.src = `/o/visualizer?preview=1&k=${encodeURIComponent(me.overlayKey)}`;
+    prev.onload = updateVizPreview;
     $('openPlayer').href = me.overlays.player;
     if (document.activeElement !== $('username')) $('username').value = me.tiktokUsername;
     const warn = $('warn');
@@ -509,7 +558,11 @@
     const norm = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const paint = () => {
       const q = norm(input.value.trim());
-      const list = giftsSeen.filter((g) => !q || norm(g.name).includes(q)).slice(0, 200);
+      // Primero los que empiezan con lo escrito ("rosa" → Rosa antes que Mi primera rosa).
+      const list = giftsSeen
+        .filter((g) => !q || norm(g.name).includes(q))
+        .sort((a, b) => (q ? norm(b.name).startsWith(q) - norm(a.name).startsWith(q) : 0))
+        .slice(0, 200);
       ul.innerHTML = '';
       if (!giftsSeen.length) {
         ul.innerHTML = '<li class="empty">La lista de regalos se carga la primera vez que conectas Mafy a un LIVE. Mientras, escribe el nombre exacto del regalo.</li>';

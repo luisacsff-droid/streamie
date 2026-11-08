@@ -14,12 +14,21 @@ const norm = (s) =>
     .toLowerCase()
     .trim();
 
+// Algunos regalos existen con varios ids (mismo nombre y precio): se tratan como uno solo.
+const PRIMARY_ID = new Map();
+try {
+  for (const g of require('../data/gifts.json')) for (const alias of g.aliases || []) PRIMARY_ID.set(String(alias), String(g.id));
+} catch {
+  /* sin lista precargada */
+}
+const primaryId = (id) => PRIMARY_ID.get(String(id)) || String(id || '');
+
 // Busca la regla de sonido que corresponde a un regalo (primero por id, luego por nombre).
 function findGiftRule(gift, settings) {
   const rules = settings.giftSounds || [];
-  const id = String(gift.id || '');
+  const id = primaryId(gift.id);
   return (
-    (id && rules.find((r) => r.giftId && r.giftId === id)) ||
+    (id && rules.find((r) => r.giftId && primaryId(r.giftId) === id)) ||
     rules.find((r) => r.giftName && norm(r.giftName) === norm(gift.name)) ||
     null
   );

@@ -3,7 +3,7 @@
 const { WebSocketServer } = require('ws');
 const db = require('./db');
 
-const ROLES = new Set(['alerts', 'player', 'songs', 'dashboard']);
+const ROLES = new Set(['alerts', 'player', 'songs', 'dashboard', 'visualizer']);
 const clients = new Map(); // userId -> Set<ws>
 let onClientMessage = () => {};
 let onClientJoin = () => {};
@@ -11,9 +11,14 @@ let onClientJoin = () => {};
 function attach(server) {
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 
-  wss.on('connection', (ws, req) => {
+  wss.on('connection', async (ws, req) => {
     const url = new URL(req.url, 'http://x');
-    const user = db.getUserByKey(url.searchParams.get('k') || '');
+    let user = null;
+    try {
+      user = await db.getUserByKey(url.searchParams.get('k') || '');
+    } catch (err) {
+      console.error('[hub]', err.message);
+    }
     const role = url.searchParams.get('role');
     if (!user || !ROLES.has(role)) {
       ws.close(4001, 'llave inválida');

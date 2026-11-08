@@ -68,22 +68,22 @@ function verify(rawBody, header) {
 
 const ACTIVE = new Set(['active', 'trialing', 'past_due']);
 
-function handleEvent(event) {
+async function handleEvent(event) {
   const obj = event.data?.object || {};
   switch (event.type) {
     case 'checkout.session.completed': {
-      const user = db.getUser(Number(obj.client_reference_id));
+      const user = await db.getUser(Number(obj.client_reference_id));
       if (!user) return;
-      db.setStripe(user.id, obj.customer, obj.subscription);
-      db.setPlan(user.id, 'pro');
+      await db.setStripe(user.id, obj.customer, obj.subscription);
+      await db.setPlan(user.id, 'pro');
       return user.id;
     }
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted': {
-      const user = db.getUserByCustomer(obj.customer);
+      const user = await db.getUserByCustomer(obj.customer);
       if (!user) return;
       const pro = event.type === 'customer.subscription.updated' && ACTIVE.has(obj.status);
-      db.setPlan(user.id, pro ? 'pro' : 'free');
+      await db.setPlan(user.id, pro ? 'pro' : 'free');
       return user.id;
     }
     default:

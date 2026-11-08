@@ -59,8 +59,8 @@ function setSessionCookie(res, token) {
   });
 }
 
-function auth(req, res, next) {
-  const user = db.userBySession(req.cookies[COOKIE]);
+async function auth(req, res, next) {
+  const user = await db.userBySession(req.cookies[COOKIE]);
   if (!user) return res.status(401).json({ error: 'Inicia sesión.' });
   req.user = user;
   next();
@@ -72,12 +72,13 @@ function overlayUrls(user) {
     alerts: `${config.baseUrl}/o/alerts?k=${k}`,
     player: `${config.baseUrl}/o/player?k=${k}`,
     songs: `${config.baseUrl}/o/songs?k=${k}`,
+    visualizer: `${config.baseUrl}/o/visualizer?k=${k}`,
   };
 }
 
-function me(user) {
+async function me(user) {
   const plan = getPlan(user.plan);
-  const used = db.getUsageSeconds(user.id);
+  const used = await db.getUsageSeconds(user.id);
   return {
     email: user.email,
     plan: plan.id,
@@ -105,11 +106,11 @@ function me(user) {
 app.post(
   '/api/billing/webhook',
   express.raw({ type: 'application/json', limit: '1mb' }),
-  (req, res) => {
+  async (req, res) => {
     if (!config.stripeWebhookSecret) return res.status(400).send('webhook no configurado');
     const raw = req.body.toString('utf8');
     if (!billing.verify(raw, req.get('stripe-signature'))) return res.status(400).send('firma inválida');
-    const userId = billing.handleEvent(JSON.parse(raw));
+    const userId = await billing.handleEvent(JSON.parse(raw));
     if (userId) pipeline.pushConfig(userId);
     res.json({ received: true });
   }
@@ -139,10 +140,10 @@ app.post(
     const password = String(req.body.password || '');
     if (!EMAIL_RE.test(email) || email.length > 200) throw new HttpError(400, 'Correo inválido.');
     if (password.length < 8) throw new HttpError(400, 'La contraseña debe tener al menos 8 caracteres.');
-    if (db.getUserByEmail(email)) throw new HttpError(409, 'Ese correo ya tiene cuenta.');
-    const user = db.createUser(email, await bcrypt.hash(password, 10));
-    setSessionCookie(res, db.createSession(user.id));
-    res.json(me(user));
+    if (await db.getUserByEmail(email)) throw new HttpError(409, 'Ese correo ya tiene cuenta.');
+    const user = await db.createUser(email, await bcrypt.hash(password, 10));
+    setSessionCookie(res, await db.createSession(user.id));
+    res.json(await me(user));
   })
 );
 
@@ -151,36 +152,36 @@ app.post(
   rateLimit(20, 15 * 60_000),
   wrap(async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase();
-    const user = db.getUserByEmail(email);
+    const user = await db.getUserByEmail(email);
     const ok = user && (await bcrypt.compare(String(req.body.password || ''), user.passHash));
     if (!ok) throw new HttpError(401, 'Correo o contraseña incorrectos.');
-    setSessionCookie(res, db.createSession(user.id));
-    res.json(me(user));
+    setSessionCookie(res, await db.createSession(user.id));
+    res.json(await me(user));
   })
 );
 
-app.post('/api/logout', (req, res) => {
-  if (req.cookies[COOKIE]) db.deleteSession(req.cookies[COOKIE]);
+app.post('/api/logout', async (req, res) => {
+  if (req.cookies[COOKIE]) await db.deleteSession(req.cookies[COOKIE]);
   res.clearCookie(COOKIE);
   res.json({ ok: true });
 });
 
-app.get('/api/me', auth, (req, res) => res.json(me(req.user)));
+app.get('/api/me', auth, async (req, res) => res.json(await me(req.user)));
 
 // ---------- configuración ----------
-app.put('/api/tiktok', auth, (req, res) => {
+app.put('/api/tiktok', auth, async (req, res) => {
   const name = String(req.body.username || '').trim().replace(/^@/, '');
   if (name && !/^[\w.]{2,24}$/.test(name)) throw new HttpError(400, 'Usuario de TikTok inválido.');
-  db.setUsername(req.user.id, name);
-  res.json(me(db.getUser(req.user.id)));
+  await db.setUsername(req.user.id, name);
+  res.json(await me(await db.getUser(req.user.id)));
 });
 
-app.put('/api/settings', auth, (req, res) => {
+app.put('/api/settings', auth, async (req, res) => {
   // Mezcla lo recibido sobre lo actual y valida contra el plan.
   const merged = normalizeSettings(deepAssign(structuredClone(req.user.settings), req.body), req.user.plan);
-  db.saveSettings(req.user.id, merged);
+  await db.saveSettings(req.user.id, merged);
   pipeline.pushConfig(req.user.id);
-  res.json(me(db.getUser(req.user.id)));
+  res.json(await me(await db.getUser(req.user.id)));
 });
 
 function deepAssign(target, src) {
@@ -196,16 +197,16 @@ function deepAssign(target, src) {
   return target;
 }
 
-app.post('/api/overlay-key/rotate', auth, (req, res) => {
+app.post('/api/overlay-key/rotate', auth, async (req, res) => {
   hub.kick(req.user.id);
-  db.rotateKey(req.user.id);
-  res.json(me(db.getUser(req.user.id)));
+  await db.rotateKey(req.user.id);
+  res.json(await me(await db.getUser(req.user.id)));
 });
 
 // ---------- conexión al LIVE ----------
-app.post('/api/live/start', auth, (req, res) => {
+app.post('/api/live/start', auth, async (req, res) => {
   try {
-    live.start(req.user);
+    await live.start(req.user);
   } catch (err) {
     throw new HttpError(400, err.message);
   }
@@ -231,7 +232,7 @@ app.post(
       kind: 'sticker',
       simulated: true,
       user: { uniqueId: 'viewer_prueba_' + Date.now(), name: 'viewer_prueba', avatar: '' },
-      sticker: { id, image: db.listStickers(req.user.id).find((x) => x.id === id)?.image || rule?.stickerImage || '' },
+      sticker: { id, image: (await db.listStickers(req.user.id)).find((x) => x.id === id)?.image || rule?.stickerImage || '' },
     });
     res.json({ ok: true });
   })
@@ -288,28 +289,28 @@ app.post(
 );
 
 // ---------- regalos recibidos ----------
-app.get('/api/gifts-seen', auth, (req, res) => res.json(db.listGifts(req.user.id)));
-app.get('/api/stickers-seen', auth, (req, res) => res.json(db.listStickers(req.user.id)));
+app.get('/api/gifts-seen', auth, async (req, res) => res.json(await db.listGifts(req.user.id)));
+app.get('/api/stickers-seen', auth, async (req, res) => res.json(await db.listStickers(req.user.id)));
 
 
 
 // ---------- archivos (sonidos e imágenes) ----------
 const mediaView = (m) => ({ id: m.id, kind: m.kind, name: m.name, size: m.size, url: media.mediaUrl(m.id) });
 
-app.get('/api/media', auth, (req, res) => res.json(db.listMedia(req.user.id).map(mediaView)));
+app.get('/api/media', auth, async (req, res) => res.json((await db.listMedia(req.user.id)).map(mediaView)));
 
 app.post(
   '/api/media',
   auth,
   express.raw({ type: ['audio/*', 'image/*'], limit: '5mb' }),
-  (req, res) => {
+  async (req, res) => {
     const plan = getPlan(req.user.plan);
     const data = req.body;
     if (!Buffer.isBuffer(data) || !data.length) throw new HttpError(400, 'No llegó ningún archivo.');
     if (data.length > plan.media.maxBytes) {
       throw new HttpError(413, `El archivo pesa más de ${Math.round(plan.media.maxBytes / 1e6)} MB, el máximo de tu plan.`);
     }
-    if (db.countMedia(req.user.id) >= plan.media.maxFiles) {
+    if ((await db.countMedia(req.user.id)) >= plan.media.maxFiles) {
       throw new HttpError(400, `Ya tienes ${plan.media.maxFiles} archivos, el máximo de tu plan. Borra alguno para subir otro.`);
     }
     const type = media.detect(data);
@@ -320,14 +321,14 @@ app.post(
     } catch {
       /* nombre inválido: se usa el genérico */
     }
-    const id = db.addMedia(req.user.id, { ...type, name: media.cleanName(name), data });
+    const id = await db.addMedia(req.user.id, { ...type, name: media.cleanName(name), data });
     res.json(mediaView({ id, kind: type.kind, name: media.cleanName(name), size: data.length }));
   }
 );
 
-app.delete('/api/media/:id', auth, (req, res) => {
+app.delete('/api/media/:id', auth, async (req, res) => {
   const id = String(req.params.id);
-  if (!db.deleteMedia(id, req.user.id)) throw new HttpError(404, 'Ese archivo no existe.');
+  if (!(await db.deleteMedia(id, req.user.id))) throw new HttpError(404, 'Ese archivo no existe.');
   // Quita el archivo de donde se estaba usando.
   const s = structuredClone(req.user.settings);
   const strip = (o) => {
@@ -338,9 +339,9 @@ app.delete('/api/media/:id', auth, (req, res) => {
   s.giftSounds.forEach(strip);
   s.stickerSounds.forEach(strip);
   s.events.forEach(strip);
-  db.saveSettings(req.user.id, normalizeSettings(s, req.user.plan));
+  await db.saveSettings(req.user.id, normalizeSettings(s, req.user.plan));
   pipeline.pushConfig(req.user.id);
-  res.json(me(db.getUser(req.user.id)));
+  res.json(await me(await db.getUser(req.user.id)));
 });
 
 // ---------- canciones ----------
@@ -373,20 +374,20 @@ app.post(
 );
 
 // ---------- administración ----------
-app.post('/api/admin/plan', auth, (req, res) => {
+app.post('/api/admin/plan', auth, async (req, res) => {
   if (!config.adminEmails.includes(req.user.email)) throw new HttpError(403, 'Solo administradores.');
-  const target = db.getUserByEmail(String(req.body.email || '').trim().toLowerCase());
+  const target = await db.getUserByEmail(String(req.body.email || '').trim().toLowerCase());
   if (!target) throw new HttpError(404, 'Usuario no encontrado.');
   if (!PLANS[req.body.plan]) throw new HttpError(400, 'Plan inválido.');
-  db.setPlan(target.id, req.body.plan);
+  await db.setPlan(target.id, req.body.plan);
   pipeline.pushConfig(target.id);
   res.json({ ok: true });
 });
 
 // ---------- páginas ----------
 // Archivos subidos: públicos por su id largo y aleatorio (los overlays los necesitan sin sesión).
-app.get('/media/:id', (req, res) => {
-  const m = db.getMedia(String(req.params.id));
+app.get('/media/:id', async (req, res) => {
+  const m = await db.getMedia(String(req.params.id));
   if (!m) return res.status(404).end();
   res.set({
     'Content-Type': m.mime,
@@ -403,6 +404,7 @@ app.get('/app', (req, res) => res.sendFile(path.join(PUBLIC, 'dashboard.html')))
 app.get('/o/alerts', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-alerts.html')));
 app.get('/o/player', (req, res) => res.sendFile(path.join(PUBLIC, 'player.html')));
 app.get('/o/songs', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-songs.html')));
+app.get('/o/visualizer', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-visualizer.html')));
 // Código y estilos: el navegador siempre pregunta si hay versión nueva (así una actualización
 // no se mezcla con archivos viejos guardados). Imágenes: se guardan un día.
 app.use(
@@ -427,8 +429,9 @@ app.use((err, req, res, next) => {
 const server = http.createServer(app);
 hub.attach(server);
 
-hub.onJoin((userId, role, ws) => {
-  const user = db.getUser(userId);
+hub.onJoin(async (userId, role, ws) => {
+  const user = await db.getUser(userId).catch(() => null);
+  if (!user) return;
   hub.sendTo(ws, pipeline.helloFor(user));
   if (role === 'player' || role === 'songs' || role === 'dashboard') hub.sendTo(ws, songs.snapshot(userId));
   if (role === 'dashboard') hub.sendTo(ws, { type: 'live:status', ...live.publicStatus(userId) });
@@ -438,14 +441,36 @@ hub.onMessage((userId, role, msg) => {
   if (role === 'player') songs.onPlayerMessage(userId, msg);
 });
 
-setInterval(() => db.purgeSessions(), 6 * 3600_000).unref();
+setInterval(() => db.purgeSessions().catch(() => {}), 6 * 3600_000).unref();
 
-server.listen(config.port, () => {
+// Lista de regalos clásicos de TikTok incluida con la app, para que el selector nunca esté vacío.
+async function seedGifts() {
+  try {
+    const gifts = require('./data/gifts.json');
+    const n = await db.saveGiftCatalog(
+      gifts.map((g) => ({ id: g.id, name: g.name, image: g.image, diamonds: g.coins })),
+      { keepExisting: true }
+    );
+    console.log(`Regalos precargados: ${n}`);
+  } catch (err) {
+    console.warn('No se pudo precargar la lista de regalos:', err.message);
+  }
+}
+
+db.init()
+  .then(seedGifts)
+  .then(() => server.listen(config.port, onListening))
+  .catch((err) => {
+    console.error('No se pudo conectar a la base de datos. Revisa DATABASE_URL.', err.message);
+    process.exit(1);
+  });
+
+function onListening() {
   console.log(`${config.appName} escuchando en ${config.baseUrl}`);
   if (!config.eulerApiKey) console.warn('⚠  Falta EULER_API_KEY: la conexión al LIVE puede fallar o limitarse.');
   if (!config.youtubeKey) console.warn('ℹ  Sin YOUTUBE_API_KEY: song request solo acepta links de YouTube.');
   if (!config.googleTtsKey) console.warn('ℹ  Sin GOOGLE_TTS_API_KEY: TTS usa solo la voz del navegador.');
-});
+}
 
 function shutdown() {
   live.stopAll();

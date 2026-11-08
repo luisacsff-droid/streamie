@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Visualizador</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #msg {
+      position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: none;
+      font: 600 15px system-ui, sans-serif; color: #fff; background: rgba(0, 0, 0, .75);
+      padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="msg"></div>
+  <script src="/overlay.js?v=9"></script>
+  <script>
+    // Visualizador de audio para OBS / LIVE Studio.
+    // Fuente "audio": escucha el dispositivo de grabación (micrófono, Mezcla estéreo, VB-CABLE, BlackHole…).
+    // Fuente "demo": animación decorativa que se mueve sola, sin necesidad de audio.
+    const params = new URLSearchParams(location.search);
+    const preview = params.has('preview');
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const msg = document.getElementById('msg');
+
+    let cfg = { style: 'bars', color: '#b6ff1f', color2: '#b6ff1f', bars: 64, sens: 1.2, source: 'demo', device: '', position: 'bottom', glow: true };
+    let analyser = null;
+    let freq = null;
+    let wave = null;
+    let stream = null;
+    let levels = new Float32Array(256);
+    let audioFailed = false;
+
+    function resize() {
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = innerWidth * dpr;
+      canvas.height = innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    addEventListener('resize', resize);
+    resize();
+
+    function note(text) {
+      msg.textContent = text;
+      msg.style.display = text ? 'block' : 'none';
+    }
+
+    // ---------- fuente de audio ----------
+    async function startAudio() {
+      stopAudio();
+      if (cfg.source !== 'audio' || preview) return;
+      try {
+        const base = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+        stream = await navigator.mediaDevices.getUserMedia({ audio: base });
+        if (cfg.device) {
+          // Busca el dispositivo por parte de su nombre (por ejemplo "CABLE" o "BlackHole").
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const want = devices.find((d) => d.kind === 'audioinput' && d.label.toLowerCase().includes(cfg.device.toLowerCase()));
+          if (want) {
+            stream.getTracks().forEach((t) => t.stop());
+            stream = await navigator.mediaDevices.getUserMedia({ audio: { ...base, deviceId: { exact: want.deviceId } } });
+          }
+        }
+        const ac = new AudioContext();
+        if (ac.state === 'suspended') await ac.resume().catch(() => {});
+        analyser = ac.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.78;
+        ac.createMediaStreamSource(stream).connect(analyser);
+        freq = new Uint8Array(analyser.frequencyBinCount);
+        wave = new Uint8Array(analyser.fftSize);
+        audioFailed = false;
+        note('');
+      } catch (err) {
+        console.warn('Sin acceso al audio:', err);
+        audioFailed = true;
+        note('Sin acceso al audio: usando modo decorativo');
+        setTimeout(() => note(''), 6000);
+      }
+    }
+    function stopAudio() {
+      stream?.getTracks().forEach((t) => t.stop());
+      stream = null;
+      analyser = null;
+    }
+
+    // ---------- datos: reales o decorativos ----------
+    const t0 = performance.now();
+    function readLevels(n) {
+      const out = new Float32Array(n);
+      if (analyser && !audioFailed) {
+        analyser.getByteFrequencyData(freq);
+        // Reparte las frecuencias en escala logarítmica (más detalle en graves y medios).
+        const max = freq.length * 0.7;
+        for (let i = 0; i < n; i++) {
+          const a = Math.floor(Math.pow(i / n, 1.6) * max);
+          const b = Math.max(a + 1, Math.floor(Math.pow((i + 1) / n, 1.6) * max));
+          let sum = 0;
+          for (let j = a; j < b; j++) sum += freq[j];
+          out[i] = Math.min(1, (sum / (b - a) / 255) * cfg.sens);
+        }
+        return out;
+      }
+      // Decorativo: ondas suaves con un "golpe" rítmico, sin audio real.
+      const t = (performance.now() - t0) / 1000;
+      const beat = Math.pow(Math.max(0, Math.sin(t * Math.PI * 2 * 1.05)), 12);
+      for (let i = 0; i < n; i++) {
+        const x = i / n;
+        const v =
+          0.35 +
+          0.22 * Math.sin(x * 9 + t * 2.1) +
+          0.16 * Math.sin(x * 23 - t * 3.3) +
+          0.1 * Math.sin(x * 51 + t * 5.7) +
+          beat * 0.35 * (1 - x);
+        out[i] = Math.max(0.03, Math.min(1, v * (1 - x * 0.45) * cfg.sens * 0.85));
+      }
+      return out;
+    }
+    function readWave(n) {
+      const out = new Float32Array(n);
+      if (analyser && !audioFailed) {
+        analyser.getByteTimeDomainData(wave);
+        for (let i = 0; i < n; i++) out[i] = ((wave[Math.floor((i / n) * wave.length)] - 128) / 128) * cfg.sens;
+        return out;
+      }
+      const t = (performance.now() - t0) / 1000;
+      for (let i = 0; i < n; i++) {
+        const x = i / n;
+        out[i] = (0.45 * Math.sin(x * 14 + t * 4) + 0.25 * Math.sin(x * 37 - t * 6.5)) * (0.6 + 0.4 * Math.sin(t * 1.3)) * cfg.sens * 0.8;
+      }
+      return out;
+    }
+
+    // ---------- dibujo ----------
+    function gradient(x0, y0, x1, y1) {
+      const g = ctx.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, cfg.color);
+      g.addColorStop(1, cfg.color2 || cfg.color);
+      return g;
+    }
+
+    function smooth(target) {
+      if (levels.length !== target.length) levels = new Float32Array(target.length);
+      for (let i = 0; i < target.length; i++) {
+        // Sube rápido, baja despacio: se ve más musical.
+        levels[i] = target[i] > levels[i] ? levels[i] * 0.4 + target[i] * 0.6 : levels[i] * 0.88 + target[i] * 0.12;
+      }
+      return levels;
+    }
+
+    function drawBars(W, H, mirror) {
+      const n = cfg.bars;
+      const lv = smooth(readLevels(n));
+      const gap = Math.max(2, (W / n) * 0.22);
+      const bw = (W - gap * (n + 1)) / n;
+      const maxH = mirror ? H * 0.46 : H * 0.92;
+      const mid = cfg.position === 'center' || mirror ? H / 2 : H;
+      ctx.fillStyle = gradient(0, mid, 0, mid - maxH);
+      for (let i = 0; i < n; i++) {
+        const h = Math.max(3, lv[i] * maxH);
+        const x = gap + i * (bw + gap);
+        const r = Math.min(bw / 2, 6);
+        roundRect(x, mid - h, bw, h, r);
+        if (mirror) roundRect(x, mid, bw, h * 0.85, r);
+        else if (cfg.position === 'center') roundRect(x, mid, bw, h, r);
+      }
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
+      ctx.fill();
+    }
+
+    function drawWave(W, H) {
+      const n = 256;
+      const w = readWave(n);
+      ctx.lineWidth = Math.max(3, H * 0.012);
+      ctx.lineJoin = ctx.lineCap = 'round';
+      ctx.strokeStyle = gradient(0, 0, W, 0);
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const x = (i / (n - 1)) * W;
+        const y = H / 2 + w[i] * H * 0.4;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    function drawCircle(W, H) {
+      const n = cfg.bars;
+      const lv = smooth(readLevels(n));
+      const cx = W / 2;
+      const cy = H / 2;
+      const base = Math.min(W, H) * 0.22;
+      const len = Math.min(W, H) * 0.24;
+      const avg = lv.reduce((a, b) => a + b, 0) / n;
+      ctx.strokeStyle = gradient(cx - base, cy - base, cx + base, cy + base);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(2, ((Math.PI * 2 * base) / n) * 0.55);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+        const r1 = base;
+        const r2 = base + 4 + lv[i] * len;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+        ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+        ctx.stroke();
+      }
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, base * (0.86 + avg * 0.12), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawDots(W, H) {
+      const cols = Math.max(8, Math.round(cfg.bars / 2));
+      const rows = 12;
+      const lv = smooth(readLevels(cols));
+      const cw = W / cols;
+      const ch = (H * 0.92) / rows;
+      const r = Math.min(cw, ch) * 0.32;
+      ctx.fillStyle = gradient(0, H, 0, 0);
+      for (let i = 0; i < cols; i++) {
+        const lit = Math.round(lv[i] * rows);
+        for (let j = 0; j < rows; j++) {
+          ctx.globalAlpha = j < lit ? 1 : 0.08;
+          ctx.beginPath();
+          ctx.arc(cw * (i + 0.5), H - ch * (j + 0.5), r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function frame() {
+      const W = innerWidth;
+      const H = innerHeight;
+      requestAnimationFrame(frame);
+      ctx.clearRect(0, 0, W, H);
+      try {
+        ctx.shadowBlur = cfg.glow ? 18 : 0;
+        ctx.shadowColor = cfg.color;
+        if (cfg.style === 'mirror') drawBars(W, H, true);
+        else if (cfg.style === 'wave') drawWave(W, H);
+        else if (cfg.style === 'circle') drawCircle(W, H);
+        else if (cfg.style === 'dots') drawDots(W, H);
+        else drawBars(W, H, false);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    requestAnimationFrame(frame);
+
+    // ---------- configuración desde el panel (cambia en vivo, sin pegar otro link) ----------
+    function apply(v) {
+      if (!v) return;
+      const sourceChanged = v.source !== cfg.source || v.device !== cfg.device;
+      cfg = { ...cfg, ...v };
+      if (sourceChanged) startAudio();
+    }
+
+    // Colores en la URL con o sin "#" (ej. color=b6ff1f).
+    function hexParam(name) {
+      const v = (params.get(name) || '').replace(/^#/, '');
+      return /^[0-9a-f]{6}$/i.test(v) ? '#' + v : '';
+    }
+
+    // Permite probar estilos desde la URL (vista previa del panel).
+    if (params.get('style')) {
+      apply({
+        style: params.get('style'),
+        color: hexParam('color') || cfg.color,
+        color2: hexParam('color2') || hexParam('color') || cfg.color2,
+        bars: Number(params.get('bars')) || cfg.bars,
+        sens: Number(params.get('sens')) || cfg.sens,
+        position: params.get('position') || cfg.position,
+        glow: params.get('glow') !== '0',
+        source: 'demo',
+      });
+    }
+
+    if (params.get('k')) {
+      overlayConnect('visualizer', (m) => {
+        if (m.type === 'hello' || m.type === 'config') {
+          if (!preview) apply(m.visualizer);
+          overlayBranding(m.branding && !preview, m.appName);
+        } else if (m.type === 'invalid-key') {
+          note('Este link ya no es válido. Copia el nuevo desde tu panel.');
+        }
+      });
+    }
+    window.addEventListener('message', (e) => {
+      if (e.origin === location.origin && e.data?.type === 'visualizer-preview') apply({ ...e.data.cfg, source: 'demo' });
+    });
+  </script>
+</body>
+</html>

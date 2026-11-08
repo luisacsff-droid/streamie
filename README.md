@@ -38,7 +38,7 @@ TikTok LIVE ──(EulerStream firma la conexión)──► servidor Node.js
 - `src/modules/` — lógica de alertas, TTS y song request.
 - `src/hub.js` — WebSocket hacia los overlays y el panel.
 - `public/` — landing, panel y overlays (HTML/CSS/JS sin framework).
-- Base de datos SQLite en un solo archivo (`data/mafy.db`).
+- Base de datos PostgreSQL (`DATABASE_URL`), por ejemplo gratis en Neon. Sin ella, los datos viven en memoria y se borran al reiniciar.
 
 ## Correrlo en tu computadora
 
@@ -76,7 +76,7 @@ Netlify/Vercel **no sirven** para el servidor: necesita mantener conexiones abie
 3. Agrega un **Volume** montado en `/data`.
 4. En *Variables* pon todo lo de `.env.example`, con:
    - `NODE_ENV=production`
-   - `DB_PATH=/data/mafy.db`
+   - `DATABASE_URL=` la cadena de conexión de tu base Postgres (Neon)
    - `BASE_URL=https://tu-app.up.railway.app` (o tu dominio)
 5. Railway detecta `npm start` solo. Revisa que `https://tu-dominio/health` responda `{"ok":true}`.
 

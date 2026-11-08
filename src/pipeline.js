@@ -10,12 +10,16 @@ const songs = require('./modules/songs');
 
 // Caché corta del usuario para no leer la BD en cada mensaje de chat.
 const userCache = new Map();
+// Guarda la promesa para que muchos mensajes seguidos hagan una sola consulta.
 function getUser(userId) {
   const hit = userCache.get(userId);
-  if (hit && Date.now() - hit.at < 5000) return hit.user;
-  const user = db.getUser(userId);
-  userCache.set(userId, { user, at: Date.now() });
-  return user;
+  if (hit && Date.now() - hit.at < 5000) return hit.promise;
+  const promise = db.getUser(userId).catch((err) => {
+    userCache.delete(userId);
+    throw err;
+  });
+  userCache.set(userId, { promise, at: Date.now() });
+  return promise;
 }
 function invalidate(userId) {
   userCache.delete(userId);
@@ -54,8 +58,8 @@ async function speak(user, text) {
 
 // Stickers ya conocidos por streamer (para avisar cuando aparece uno nuevo).
 const knownStickers = new Map();
-function isNewSticker(userId, id) {
-  if (!knownStickers.has(userId)) knownStickers.set(userId, new Set(db.listStickers(userId).map((x) => x.id)));
+async function isNewSticker(userId, id) {
+  if (!knownStickers.has(userId)) knownStickers.set(userId, new Set((await db.listStickers(userId)).map((x) => x.id)));
   const set = knownStickers.get(userId);
   if (set.has(id)) return false;
   set.add(id);
@@ -66,11 +70,11 @@ function isNewSticker(userId, id) {
 const stickerCooldown = new Map();
 const STICKER_COOLDOWN_MS = 4000;
 
-function handleSticker(user, event) {
+async function handleSticker(user, event) {
   const st = event.sticker;
   if (!event.simulated) {
-    const fresh = isNewSticker(user.id, st.id);
-    db.rememberSticker(user.id, st);
+    const fresh = await isNewSticker(user.id, st.id);
+    await db.rememberSticker(user.id, st);
     if (fresh) {
       log(user.id, { kind: 'sticker', user: event.user.name, text: `Sticker nuevo detectado (de ${event.user.name}). Ya puedes ponerle sonido en la pestaña Stickers.`, sticker: st });
     }
@@ -86,7 +90,12 @@ function handleSticker(user, event) {
 }
 
 async function handleEvent(userId, event) {
-  const user = getUser(userId);
+  let user;
+  try {
+    user = await getUser(userId);
+  } catch (err) {
+    return console.error('[pipeline] base de datos no disponible:', err.message);
+  }
   if (!user) return;
   const session = state.get(userId);
 
@@ -105,13 +114,13 @@ async function handleEvent(userId, event) {
       return;
     }
 
-    if (event.kind === 'sticker') return handleSticker(user, event);
+    if (event.kind === 'sticker') return await handleSticker(user, event);
 
     if (event.kind === 'gift') {
       session.gifters.add(event.user.uniqueId);
       const total = event.gift.diamonds * event.gift.count;
       log(userId, { kind: 'gift', user: event.user.name, text: `${event.user.name} envió ${event.gift.count}x ${event.gift.name} (${total} 💎)` });
-      if (!event.simulated) db.rememberGift(userId, event.gift);
+      if (!event.simulated) db.rememberGift(userId, event.gift).catch((err) => console.warn('[pipeline]', err.message));
       const moved = songs.onGift(user, event);
       if (moved) log(userId, { kind: 'song', text: moved });
     } else if (event.kind === 'follow' || event.kind === 'share') {
@@ -133,7 +142,7 @@ async function handleEvent(userId, event) {
 // El streamer dispara una alerta propia desde el panel.
 async function fireEvent(userId, eventId, userName) {
   invalidate(userId);
-  const user = getUser(userId);
+  const user = await getUser(userId);
   const ev = user?.settings.events.find((e) => e.id === eventId);
   if (!ev) return false;
   const alert = buildCustomAlert(ev, userName, user.settings);
@@ -154,13 +163,18 @@ function helloFor(user) {
     songsVolume: user.settings.songs.volume,
     songsCommand: user.settings.songs.command,
     alertsVolume: user.settings.alerts.volume,
+    visualizer: user.settings.visualizer,
   };
 }
 
-function pushConfig(userId) {
+async function pushConfig(userId) {
   invalidate(userId);
-  const user = db.getUser(userId);
-  if (user) hub.send(userId, { ...helloFor(user), type: 'config' });
+  try {
+    const user = await db.getUser(userId);
+    if (user) hub.send(userId, { ...helloFor(user), type: 'config' });
+  } catch (err) {
+    console.warn('[pipeline]', err.message);
+  }
 }
 
 module.exports = { handleEvent, fireEvent, helloFor, pushConfig, invalidate, log };

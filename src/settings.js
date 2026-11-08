@@ -13,6 +13,18 @@ const DEFAULTS = {
     soundId: '', // Pro: sonido subido para todas las alertas
     imageId: '', // Pro: imagen o GIF subido para todas las alertas
   },
+  // Visualizador de audio para el stream.
+  visualizer: {
+    style: 'bars', // bars | mirror | wave | circle | dots
+    color: '#b6ff1f',
+    color2: '#b6ff1f',
+    bars: 64,
+    sens: 1.2,
+    position: 'bottom', // bottom | center
+    glow: true,
+    source: 'demo', // demo (decorativo) | audio (dispositivo de grabación)
+    device: '', // parte del nombre del dispositivo, ej. "CABLE" o "BlackHole"
+  },
   // Reglas: cuando llega cierto regalo, suena su propio sonido.
   // { id, giftId, giftName, giftImage, soundId, imageId, text }
   giftSounds: [],
@@ -97,6 +109,18 @@ function normalizeSettings(raw, planId) {
       imageId: mediaId(r.imageId),
       text: str(r.text, 120),
     }));
+
+  // Visualizador
+  const v = s.visualizer;
+  if (!['bars', 'mirror', 'wave', 'circle', 'dots'].includes(v.style)) v.style = 'bars';
+  const hex = (c, d) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c.toLowerCase() : d);
+  v.color = hex(v.color, '#b6ff1f');
+  v.color2 = hex(v.color2, v.color);
+  v.bars = Math.round(clamp(v.bars, 16, 128));
+  v.sens = clamp(v.sens, 0.3, 3);
+  if (!['bottom', 'center'].includes(v.position)) v.position = 'bottom';
+  if (!['demo', 'audio'].includes(v.source)) v.source = 'demo';
+  v.device = str(v.device, 60).trim();
 
   // Sonidos por sticker
   const seenSticker = new Set();

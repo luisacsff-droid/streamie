@@ -17,7 +17,7 @@ async function loadGiftCatalog(conn) {
   try {
     const gifts = await conn.fetchAvailableGifts();
     if (Array.isArray(gifts) && gifts.length) {
-      const n = db.saveGiftCatalog(
+      const n = await db.saveGiftCatalog(
         gifts.map((g) => ({
           id: String(g.id ?? ''),
           name: g.name || '',
@@ -66,9 +66,9 @@ function activeCount() {
   return n;
 }
 
-function remainingSeconds(user) {
+async function remainingSeconds(user) {
   const limit = getPlan(user.plan).monthlyLiveHours * 3600;
-  return limit - db.getUsageSeconds(user.id);
+  return limit - (await db.getUsageSeconds(user.id));
 }
 
 // La librería ha cambiado nombres de campos entre versiones (v2: comment/giftDetails,
@@ -159,10 +159,16 @@ function schedule(userId, ms) {
 async function attempt(userId) {
   const l = lives.get(userId);
   if (!l || l.stopping) return;
-  const user = db.getUser(userId);
+  let user;
+  try {
+    user = await db.getUser(userId);
+  } catch (err) {
+    console.warn(`[live ${userId}] base de datos no disponible:`, err.message);
+    return schedule(userId, 10_000);
+  }
   if (!user) return stop(userId);
 
-  if (remainingSeconds(user) <= 0) {
+  if ((await remainingSeconds(user)) <= 0) {
     return stop(userId, 'Se acabaron tus horas del mes. Pásate a Pro para seguir.');
   }
   if (activeCount() >= config.maxConnections) {
@@ -216,21 +222,25 @@ async function attempt(userId) {
   }
 }
 
-function start(user) {
+async function start(user) {
   const username = (user.tiktokUsername || '').replace(/^@/, '').trim();
   if (!username) throw new Error('Primero guarda tu usuario de TikTok.');
-  if (remainingSeconds(user) <= 0) throw new Error('Se acabaron tus horas del mes.');
+  if ((await remainingSeconds(user)) <= 0) throw new Error('Se acabaron tus horas del mes.');
 
   stop(user.id, '', true);
   const l = { username, status: 'connecting', message: '', startedAt: Date.now(), errors: 0, stopping: false };
   lives.set(user.id, l);
 
   // Cuenta las horas solo mientras está conectado al LIVE.
-  l.usageTimer = setInterval(() => {
+  l.usageTimer = setInterval(async () => {
     if (l.status !== 'live') return;
-    db.addUsage(user.id, USAGE_TICK_MS / 1000);
-    const fresh = db.getUser(user.id);
-    if (fresh && remainingSeconds(fresh) <= 0) stop(user.id, 'Se acabaron tus horas del mes.');
+    try {
+      await db.addUsage(user.id, USAGE_TICK_MS / 1000);
+      const fresh = await db.getUser(user.id);
+      if (fresh && (await remainingSeconds(fresh)) <= 0) stop(user.id, 'Se acabaron tus horas del mes.');
+    } catch (err) {
+      console.warn('[live] no se pudo registrar el uso:', err.message);
+    }
   }, USAGE_TICK_MS);
 
   attempt(user.id);

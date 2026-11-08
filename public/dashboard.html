@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Panel · Mafy</title>
   <link rel="icon" type="image/png" href="/img/favicon.png">
-  <link rel="stylesheet" href="/styles.css?v=8">
-  <link rel="stylesheet" href="/dashboard.css?v=8">
+  <link rel="stylesheet" href="/styles.css?v=9">
+  <link rel="stylesheet" href="/dashboard.css?v=9">
 </head>
 <body>
   <header class="top">
@@ -76,6 +76,26 @@
           </div>
           <div class="copy"><input readonly id="urlSongs" aria-label="Link del overlay de canciones"><button data-copy="urlSongs" class="sm">Copiar</button></div>
         </div>
+        <div class="overlay-row">
+          <div>
+            <h3>Visualizador de audio</h3>
+            <p class="small muted">Barras, ondas o círculo que se mueven con la música. Los cambios de abajo se aplican al instante, sin volver a pegar el link.</p>
+          </div>
+          <div class="copy"><input readonly id="urlVisualizer" aria-label="Link del visualizador"><button data-copy="urlVisualizer" class="sm">Copiar</button></div>
+        </div>
+        <div class="viz">
+          <div class="viz-preview"><iframe id="vizPreview" title="Vista previa del visualizador" loading="lazy"></iframe></div>
+          <div class="fields" data-section="visualizer"></div>
+        </div>
+        <details class="viz-help">
+          <summary>¿Cómo hago que se mueva con el audio real?</summary>
+          <ol class="small">
+            <li>En <b>Fuente</b> elige <b>Audio real</b>.</li>
+            <li><b>OBS:</b> el visualizador escucha tu dispositivo de grabación. Abre OBS con la opción <code>--enable-media-stream</code> (en Windows: clic derecho al acceso directo → Propiedades → al final de “Destino”).</li>
+            <li>Para que reaccione a la música de tu computadora y no a tu micrófono: en Windows activa <b>Mezcla estéreo</b> o instala <b>VB-CABLE</b>; en Mac instala <b>BlackHole</b>. Escribe su nombre en <b>Dispositivo</b>.</li>
+            <li><b>TikTok LIVE Studio</b> puede no dejar que el visualizador escuche el audio. Si no se mueve, usa el modo <b>Decorativo</b>, que se mueve solo.</li>
+          </ol>
+        </details>
         <p class="small muted rotate">¿Alguien más tiene tus links? <button id="rotateBtn" class="ghost sm danger">Generar links nuevos</button></p>
       </div>
       <div class="tab-panel" data-panel="alerts" hidden><div class="fields" data-section="alerts"></div></div>
@@ -149,6 +169,6 @@
     </aside>
   </main>
 
-  <script src="/dashboard.js?v=8"></script>
+  <script src="/dashboard.js?v=9"></script>
 </body>
 </html>
