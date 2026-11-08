@@ -438,7 +438,14 @@ hub.onJoin(async (userId, role, ws) => {
 });
 
 hub.onMessage((userId, role, msg) => {
-  if (role === 'player') songs.onPlayerMessage(userId, msg);
+  if (role !== 'player') return;
+  // Niveles del audio de la PC (capturados en el Reproductor) → visualizadores del stream.
+  if (msg.type === 'viz:levels') {
+    const ok = (a, max) => Array.isArray(a) && a.length <= max && a.every((n) => Number.isInteger(n) && n >= 0 && n <= 255);
+    if (ok(msg.l, 128) && (msg.w === undefined || ok(msg.w, 64))) hub.send(userId, { type: 'viz:levels', l: msg.l, w: msg.w }, ['visualizer']);
+    return;
+  }
+  songs.onPlayerMessage(userId, msg);
 });
 
 setInterval(() => db.purgeSessions().catch(() => {}), 6 * 3600_000).unref();

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Panel · Mafy</title>
   <link rel="icon" type="image/png" href="/img/favicon.png">
-  <link rel="stylesheet" href="/styles.css?v=9">
-  <link rel="stylesheet" href="/dashboard.css?v=9">
+  <link rel="stylesheet" href="/styles.css?v=10">
+  <link rel="stylesheet" href="/dashboard.css?v=10">
 </head>
 <body>
   <header class="top">
@@ -87,13 +87,14 @@
           <div class="viz-preview"><iframe id="vizPreview" title="Vista previa del visualizador" loading="lazy"></iframe></div>
           <div class="fields" data-section="visualizer"></div>
         </div>
-        <details class="viz-help">
-          <summary>¿Cómo hago que se mueva con el audio real?</summary>
+        <details class="viz-help" open>
+          <summary>¿Cómo hago que se mueva con la música?</summary>
           <ol class="small">
-            <li>En <b>Fuente</b> elige <b>Audio real</b>.</li>
-            <li><b>OBS:</b> el visualizador escucha tu dispositivo de grabación. Abre OBS con la opción <code>--enable-media-stream</code> (en Windows: clic derecho al acceso directo → Propiedades → al final de “Destino”).</li>
-            <li>Para que reaccione a la música de tu computadora y no a tu micrófono: en Windows activa <b>Mezcla estéreo</b> o instala <b>VB-CABLE</b>; en Mac instala <b>BlackHole</b>. Escribe su nombre en <b>Dispositivo</b>.</li>
-            <li><b>TikTok LIVE Studio</b> puede no dejar que el visualizador escuche el audio. Si no se mueve, usa el modo <b>Decorativo</b>, que se mueve solo.</li>
+            <li>En <b>Fuente</b> elige <b>Audio de la PC</b>.</li>
+            <li>Abre el <b>Reproductor</b> (botón Abrir, arriba) en Chrome o Edge y da clic en <b>Capturar audio de la PC</b>.</li>
+            <li><b>Windows:</b> elige <b>Toda la pantalla</b> y activa <b>Compartir audio del sistema</b>. <b>Mac:</b> elige la pestaña del Reproductor y activa <b>Compartir audio de la pestaña</b> (capta la música y la voz de Mafy).</li>
+            <li>Solo se capta lo que suena en la computadora, nunca tu micrófono. Funciona igual en TikTok LIVE Studio y en OBS, porque el visualizador recibe el audio desde el Reproductor.</li>
+            <li>Si no llega audio, el visualizador se mueve en modo decorativo para que tu stream nunca se vea vacío.</li>
           </ol>
         </details>
         <p class="small muted rotate">¿Alguien más tiene tus links? <button id="rotateBtn" class="ghost sm danger">Generar links nuevos</button></p>
@@ -169,6 +170,6 @@
     </aside>
   </main>
 
-  <script src="/dashboard.js?v=9"></script>
+  <script src="/dashboard.js?v=10"></script>
 </body>
 </html>

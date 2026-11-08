@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Reproductor · Mafy</title>
   <link rel="icon" type="image/png" href="/img/favicon.png">
-  <link rel="stylesheet" href="/styles.css?v=9">
+  <link rel="stylesheet" href="/styles.css?v=10">
   <style>
     main { max-width: 720px; margin: 0 auto; padding: 28px 20px; display: grid; gap: 18px; }
     .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -19,6 +19,8 @@
     .row h2 { font-size: 17px; margin-bottom: 8px; }
     .voice { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
     #speaking { min-height: 1.5em; }
+    .meter { height: 10px; align-self: center; background: var(--line); border-radius: 9px; overflow: hidden; }
+    .meter i { display: block; height: 100%; width: 0; background: var(--spark); transition: width .08s linear; }
     #unlock {
       position: fixed; inset: 0; background: rgba(0, 0, 0, .94); display: grid; place-items: center; z-index: 10; text-align: center; padding: 20px;
     }
@@ -44,6 +46,16 @@
     <div class="video"><div id="yt"></div></div>
     <p id="now" class="muted">Sin canción.</p>
 
+    <section class="row" id="vizRow">
+      <h2>Audio para el visualizador</h2>
+      <p class="small muted">Captura solo lo que suena en tu computadora (no tu micrófono) y lo manda al visualizador de tu stream. Funciona aunque uses TikTok LIVE Studio.</p>
+      <div class="voice" style="margin-top:10px">
+        <div class="meter" aria-hidden="true"><i id="vizMeter"></i></div>
+        <button id="vizBtn" class="sm primary">Capturar audio de la PC</button>
+      </div>
+      <p id="vizState" class="small muted" style="margin-top:8px"></p>
+    </section>
+
     <section class="row">
       <h2>Voz del chat</h2>
       <div class="voice">
@@ -55,7 +67,7 @@
     </section>
   </main>
 
-  <script src="/overlay.js?v=9"></script>
+  <script src="/overlay.js?v=10"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <script>
     let player = null;
@@ -168,6 +180,72 @@
       if (state.paused) player.pauseVideo();
       else if (player.getPlayerState() !== YT.PlayerState.PLAYING) player.playVideo();
     }
+
+    // ----- audio de la PC → visualizador -----
+    // Chrome pide elegir qué compartir: en Windows "Toda la pantalla" + "Compartir audio del sistema";
+    // en Mac, esta misma pestaña + "Compartir audio de la pestaña" (capta la música y la voz de Mafy).
+    let vizStream = null;
+    let vizTimer = null;
+    function vizStatus(t) { $('vizState').textContent = t; }
+    function stopViz(text) {
+      clearInterval(vizTimer);
+      vizStream?.getTracks().forEach((t) => t.stop());
+      vizStream = null;
+      $('vizBtn').textContent = 'Capturar audio de la PC';
+      $('vizMeter').style.width = '0';
+      vizStatus(text || '');
+    }
+    async function startViz() {
+      try {
+        const s = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
+          systemAudio: 'include',
+          selfBrowserSurface: 'include',
+        });
+        const audio = s.getAudioTracks();
+        s.getVideoTracks().forEach((t) => t.stop()); // solo nos interesa el audio
+        if (!audio.length) {
+          s.getTracks().forEach((t) => t.stop());
+          return vizStatus('No se compartió audio. Vuelve a intentarlo y activa “Compartir audio del sistema” (o “de la pestaña”).');
+        }
+        vizStream = new MediaStream(audio);
+        audio[0].addEventListener('ended', () => stopViz('Se dejó de compartir el audio.'));
+        const ac = new AudioContext();
+        const an = ac.createAnalyser();
+        an.fftSize = 2048;
+        an.smoothingTimeConstant = 0.7;
+        ac.createMediaStreamSource(vizStream).connect(an);
+        const f = new Uint8Array(an.frequencyBinCount);
+        const w = new Uint8Array(an.fftSize);
+        const N = 96;
+        vizTimer = setInterval(() => {
+          an.getByteFrequencyData(f);
+          an.getByteTimeDomainData(w);
+          // Bandas en escala logarítmica: más detalle en graves y medios.
+          const l = new Array(N);
+          const max = f.length * 0.7;
+          let peak = 0;
+          for (let i = 0; i < N; i++) {
+            const a = Math.floor(Math.pow(i / N, 1.6) * max);
+            const b = Math.max(a + 1, Math.floor(Math.pow((i + 1) / N, 1.6) * max));
+            let sum = 0;
+            for (let j = a; j < b; j++) sum += f[j];
+            l[i] = Math.round(sum / (b - a));
+            if (l[i] > peak) peak = l[i];
+          }
+          const wave = new Array(64);
+          for (let i = 0; i < 64; i++) wave[i] = w[Math.floor((i / 64) * w.length)];
+          conn.send({ type: 'viz:levels', l, w: wave });
+          $('vizMeter').style.width = Math.round((peak / 255) * 100) + '%';
+        }, 40);
+        $('vizBtn').textContent = 'Dejar de capturar';
+        vizStatus('Capturando el audio de la PC. Deja esta pestaña abierta durante tu LIVE.');
+      } catch (err) {
+        stopViz(err?.name === 'NotAllowedError' ? 'Cancelaste la captura.' : 'Tu navegador no permitió capturar el audio. Usa Chrome o Edge.');
+      }
+    }
+    $('vizBtn').onclick = () => (vizStream ? stopViz('Captura detenida.') : startViz());
 
     const conn = overlayConnect('player', (msg) => {
       if (msg.type === 'hello' || msg.type === 'config') {

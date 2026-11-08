@@ -16,7 +16,7 @@
 <body>
   <canvas id="c"></canvas>
   <div id="msg"></div>
-  <script src="/overlay.js?v=9"></script>
+  <script src="/overlay.js?v=10"></script>
   <script>
     // Visualizador de audio para OBS / LIVE Studio.
     // Fuente "audio": escucha el dispositivo de grabación (micrófono, Mezcla estéreo, VB-CABLE, BlackHole…).
@@ -34,6 +34,9 @@
     let stream = null;
     let levels = new Float32Array(256);
     let audioFailed = false;
+    // Audio de la PC que manda el Reproductor por el servidor.
+    let remote = null; // { l: [...], w: [...], at }
+    const remoteFresh = () => cfg.source === 'pc' && remote && performance.now() - remote.at < 1500;
 
     function resize() {
       const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -92,6 +95,17 @@
     const t0 = performance.now();
     function readLevels(n) {
       const out = new Float32Array(n);
+      if (remoteFresh()) {
+        const l = remote.l;
+        for (let i = 0; i < n; i++) {
+          const x = (i / n) * (l.length - 1);
+          const a = Math.floor(x);
+          const t = x - a;
+          const v = (l[a] * (1 - t) + (l[Math.min(a + 1, l.length - 1)] || 0) * t) / 255;
+          out[i] = Math.min(1, v * cfg.sens);
+        }
+        return out;
+      }
       if (analyser && !audioFailed) {
         analyser.getByteFrequencyData(freq);
         // Reparte las frecuencias en escala logarítmica (más detalle en graves y medios).
@@ -122,6 +136,11 @@
     }
     function readWave(n) {
       const out = new Float32Array(n);
+      if (remoteFresh() && remote.w?.length) {
+        const w = remote.w;
+        for (let i = 0; i < n; i++) out[i] = ((w[Math.floor((i / n) * w.length)] - 128) / 128) * cfg.sens;
+        return out;
+      }
       if (analyser && !audioFailed) {
         analyser.getByteTimeDomainData(wave);
         for (let i = 0; i < n; i++) out[i] = ((wave[Math.floor((i / n) * wave.length)] - 128) / 128) * cfg.sens;
@@ -289,6 +308,8 @@
         if (m.type === 'hello' || m.type === 'config') {
           if (!preview) apply(m.visualizer);
           overlayBranding(m.branding && !preview, m.appName);
+        } else if (m.type === 'viz:levels') {
+          remote = { l: m.l, w: m.w, at: performance.now() };
         } else if (m.type === 'invalid-key') {
           note('Este link ya no es válido. Copia el nuevo desde tu panel.');
         }

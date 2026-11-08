@@ -53,11 +53,12 @@
       {
         path: 'visualizer.source', type: 'select', label: 'Fuente',
         options: () => [
+          { value: 'pc', label: 'Audio de la PC (recomendado)' },
           { value: 'demo', label: 'Decorativo (se mueve solo)' },
-          { value: 'audio', label: 'Audio real (dispositivo de grabación)' },
+          { value: 'audio', label: 'Dispositivo de grabación (avanzado, OBS)' },
         ],
       },
-      { path: 'visualizer.device', type: 'text', label: 'Dispositivo (opcional)', placeholder: 'Ej: CABLE, BlackHole, Mezcla estéreo', hint: 'Solo para Audio real. Vacío = el predeterminado.' },
+      { path: 'visualizer.device', type: 'text', label: 'Dispositivo (opcional)', placeholder: 'Ej: CABLE, BlackHole, Mezcla estéreo', hint: 'Solo para “Dispositivo de grabación”. Vacío = el predeterminado.' },
       { path: 'visualizer.color', type: 'color', label: 'Color' },
       { path: 'visualizer.color2', type: 'color', label: 'Segundo color (degradado)' },
       { path: 'visualizer.bars', type: 'range', min: 16, max: 128, step: 8, label: 'Cantidad de barras', fmt: (v) => v },

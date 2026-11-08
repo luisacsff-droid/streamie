@@ -22,7 +22,7 @@ const DEFAULTS = {
     sens: 1.2,
     position: 'bottom', // bottom | center
     glow: true,
-    source: 'demo', // demo (decorativo) | audio (dispositivo de grabación)
+    source: 'pc', // demo (decorativo) | pc (audio de la PC, capturado en el Reproductor) | audio (dispositivo de grabación)
     device: '', // parte del nombre del dispositivo, ej. "CABLE" o "BlackHole"
   },
   // Reglas: cuando llega cierto regalo, suena su propio sonido.
@@ -119,7 +119,7 @@ function normalizeSettings(raw, planId) {
   v.bars = Math.round(clamp(v.bars, 16, 128));
   v.sens = clamp(v.sens, 0.3, 3);
   if (!['bottom', 'center'].includes(v.position)) v.position = 'bottom';
-  if (!['demo', 'audio'].includes(v.source)) v.source = 'demo';
+  if (!['demo', 'pc', 'audio'].includes(v.source)) v.source = 'demo';
   v.device = str(v.device, 60).trim();
 
   // Sonidos por sticker
