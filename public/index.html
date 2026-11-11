@@ -29,7 +29,11 @@
     .plan .price { font: 600 14px var(--body); color: var(--muted); }
     .plan.pro .price { color: var(--spark); }
     .plan .price s { color: var(--muted); font-weight: 400; margin-right: 4px; }
-    .founder { margin: -2px 0 10px; font-size: 13px; font-weight: 600; color: var(--spark); }
+    .founder {
+      margin: 0 0 12px; padding: 8px 10px; border-radius: 10px; font-size: 13px; line-height: 1.4;
+      background: rgba(182, 255, 31, .1); border: 1px solid rgba(182, 255, 31, .35); color: var(--text);
+    }
+    .founder b { color: var(--spark); }
     .legal-note { font-size: 12px; color: var(--muted); text-align: center; }
     .legal-note a, .site-footer a { color: var(--muted); }
     .legal-note a:hover, .site-footer a:hover { color: var(--text); }
@@ -46,13 +50,16 @@
     .side { position: relative; }
     .stage {
       --cw: min(380px, calc(100vw - 40px));
-      --u: calc(var(--cw) / 572);
-      position: relative; width: var(--cw); margin: 0 auto;
+      /* La tarjeta es un poco más ancha que el letrero (760 en vez de 572 px de la imagen),
+         así Mafy se ve más compacta y el registro queda más arriba en la pantalla. */
+      --u: calc(var(--cw) / 760);
+      --o: calc((var(--cw) - var(--u) * 572) / 2); /* margen de la tarjeta a cada lado del letrero */
+      position: relative; width: var(--cw); margin: calc(var(--u) * -90) auto 0;
       padding-top: calc(var(--u) * 1026);
       /* Sin animación ni transform aquí: crearían una capa aparte y el negro de la imagen dejaría de fundirse. */
     }
     .mascot {
-      position: absolute; z-index: 0; top: 0; left: calc(var(--u) * -283);
+      position: absolute; z-index: 0; top: 0; left: calc(var(--o) - var(--u) * 283);
       width: calc(var(--u) * 1086); height: calc(var(--u) * 1448); max-width: none;
       mix-blend-mode: lighten; /* el negro de la imagen se funde con el fondo */
       -webkit-mask-image: linear-gradient(to bottom, #000 90%, transparent 100%);
@@ -62,14 +69,14 @@
     /* Las manos, recortadas con fondo transparente, van encima de la tarjeta. */
     .hands {
       position: absolute; z-index: 2; pointer-events: none;
-      left: calc(var(--u) * 35); top: calc(var(--u) * 991);
+      left: calc(var(--o) + var(--u) * 35); top: calc(var(--u) * 991);
       width: calc(var(--u) * 548); height: calc(var(--u) * 133);
       background: url('/img/mafy-hands.webp') no-repeat 0 0 / 100% 100%;
     }
     .card {
       position: relative; z-index: 1; width: 100%;
       background: #0e1008; border: calc(var(--u) * 10) solid var(--spark); border-radius: calc(var(--u) * 34);
-      padding: calc(var(--u) * 115) 26px 26px;
+      padding: calc(var(--u) * 110) 26px 26px;
       box-shadow: 0 0 28px rgba(182, 255, 31, .35), inset 0 0 18px rgba(182, 255, 31, .12);
     }
     .tabs { display: flex; gap: 6px; margin-bottom: 22px; background: var(--night); padding: 4px; border-radius: 999px; }
@@ -169,7 +176,7 @@
       const note = document.getElementById('founderNote');
       if (p.founderLeft > 0) {
         price.innerHTML = `<s>$${p.normal}</s> $${p.founder} MXN al mes`;
-        note.textContent = `Precio de fundador para siempre · quedan ${p.founderLeft} de ${p.founderSlots} lugares`;
+        note.innerHTML = `<b>Paquete fundadores</b><br>Las primeras ${p.founderSlots} personas pagan $${p.founder} MXN al mes, para siempre. Quedan <b>${p.founderLeft}</b> lugares.`;
         note.hidden = false;
       } else {
         price.textContent = `$${p.normal} MXN al mes`;

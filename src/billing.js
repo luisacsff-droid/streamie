@@ -23,21 +23,26 @@ async function stripe(path, params) {
 
 // Precios para mostrar y cuántos lugares de fundador quedan.
 async function pricing() {
-  const founderOn = Boolean(config.stripeFounderPriceId);
-  const taken = founderOn ? await db.countFounders() : 0;
+  // El paquete de fundadores se anuncia siempre que haya lugares (FOUNDER_SLOTS > 0).
+  const taken = config.founderSlots > 0 ? await db.countFounders() : 0;
   return {
     enabled: enabled(),
     normal: config.proPriceMxn,
     founder: config.founderPriceMxn,
-    founderSlots: founderOn ? config.founderSlots : 0,
-    founderLeft: founderOn ? Math.max(0, config.founderSlots - taken) : 0,
+    founderSlots: config.founderSlots,
+    founderLeft: Math.max(0, config.founderSlots - taken),
   };
 }
 
 async function checkoutUrl(user) {
   // Quien ya fue fundador conserva su precio aunque haya cancelado y vuelva.
   const p = await pricing();
-  const founder = Boolean(config.stripeFounderPriceId) && (user.founder || p.founderLeft > 0);
+  const wantsFounder = user.founder || p.founderLeft > 0;
+  if (wantsFounder && !config.stripeFounderPriceId) {
+    // Sin el precio de fundador en Stripe no se puede cobrar $99: mejor no cobrar de más.
+    throw new Error('El paquete de fundadores aún no está listo para cobrarse. Intenta más tarde.');
+  }
+  const founder = wantsFounder;
   const tier = founder ? 'founder' : 'normal';
   const session = await stripe('checkout/sessions', {
     mode: 'subscription',
