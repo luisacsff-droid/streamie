@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}} · Mafy</title>
+  <link rel="icon" type="image/png" href="/img/favicon.png">
+  <link rel="stylesheet" href="/styles.css?v=12">
+  <style>
+    .legal { max-width: 72ch; margin: 0 auto; padding: 32px 20px 64px; }
+    .legal .back { display: inline-flex; align-items: center; gap: 10px; font: 800 18px var(--display); color: var(--text); text-decoration: none; margin-bottom: 32px; }
+    .legal .back img { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--spark); }
+    .legal h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 800; letter-spacing: -0.01em; }
+    .legal .updated { color: var(--muted); margin: 8px 0 28px; }
+    .legal h2 { font-size: 20px; margin: 32px 0 10px; }
+    .legal p, .legal li { line-height: 1.65; color: #d9e0cf; }
+    .legal ul { padding-left: 22px; }
+    .legal li + li { margin-top: 6px; }
+    .legal p + p { margin-top: 10px; }
+    .legal .box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; margin: 16px 0; }
+    .legal-footer { max-width: 72ch; margin: 0 auto; padding: 20px 20px 40px; border-top: 1px solid var(--line); display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; }
+    .legal-footer a { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main class="legal">
+    <a class="back" href="/"><img src="/img/mafy-icon.webp" alt="" width="32" height="32">Mafy</a>
+    {{BODY}}
+  </main>
+  <footer class="legal-footer">
+    <a href="/">Inicio</a>
+    <a href="/terminos">Términos y condiciones</a>
+    <a href="/privacidad">Aviso de privacidad</a>
+  </footer>
+</body>
+</html>

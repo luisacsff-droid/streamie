@@ -8,16 +8,15 @@ El streamer crea su cuenta, escribe su usuario de TikTok, pega tres links en OBS
 
 ## Qué incluye
 
-| | Free | Pro |
+| | Free (gratis) | Pro ($99 MXN al mes) |
 |---|---|---|
 | Alertas de regalos, follows y shares | ✅ textos fijos | ✅ textos, sonido e imagen propios |
 | Sonido propio por regalo | 5 regalos | 50 regalos |
 | Sonido propio por sticker del chat (se detectan solos) | 5 stickers | 50 stickers |
-| Eventos manuales (alertas que disparas con un botón) | 3 | 30 |
 | Archivos subidos (sonidos, imágenes, GIFs) | 10 de hasta 1 MB | 100 de hasta 5 MB |
-| TTS (leer el chat) | voz del navegador, 100 letras | voces naturales (Google), 300 letras, modo “solo quien regaló” |
-| Song request (`!sr`) | cola de 5, siempre con aprobación | cola de 50, aprobación opcional, regalos que adelantan canciones |
-| Horas de LIVE al mes | 20 | 300 (uso justo) |
+| TTS (leer el chat) | voz del navegador, 100 letras | voz del navegador, 300 letras, modo “solo quien regaló” |
+| Song request de YouTube (`!sr`) | cola de 5, siempre con aprobación | cola de 50, aprobación opcional, regalos que adelantan canciones |
+| Horas de LIVE | 5 por semana | 300 al mes (uso justo) |
 | Marca en overlays | sí | no |
 
 Los límites se cambian en `src/plans.js`.
@@ -60,7 +59,7 @@ Para probar el plan Pro sin pagos: `npm run set-plan -- tu@correo.com pro`
 |---|---|---|---|
 | `EULER_API_KEY` | Firmar la conexión al LIVE | Sí en producción | eulerstream.com → Dashboard → API Keys |
 | `MAX_CONNECTIONS` | Tope de streamers conectados a la vez (según tu plan de Euler) | No (20) | — |
-| `GOOGLE_TTS_API_KEY` | Voces naturales del plan Pro | No | Google Cloud → habilitar *Cloud Text-to-Speech API* → API key |
+| `GOOGLE_TTS_API_KEY` | Voces naturales (apagadas por ahora en `src/plans.js`) | No | Google Cloud → habilitar *Cloud Text-to-Speech API* → API key |
 | `YOUTUBE_API_KEY` | Buscar canciones por nombre (`!sr bad bunny`) | No; sin ella solo se aceptan links | Google Cloud → habilitar *YouTube Data API v3* → API key |
 | `STRIPE_*` | Cobrar el plan Pro | No | Stripe → Productos (precio recurrente) + Webhooks |
 | `ADMIN_EMAILS` | Cambiar planes desde `/api/admin/plan` | No | — |

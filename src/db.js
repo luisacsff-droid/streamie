@@ -93,10 +93,32 @@ const SCHEMA = [
 // Crea las tablas si no existen. Se llama una vez al arrancar el servidor.
 async function init() {
   for (const sql of SCHEMA) await q(sql);
+  // Columnas agregadas después (no fallan si ya existen).
+  try {
+    await q('ALTER TABLE users ADD COLUMN IF NOT EXISTS founder BOOLEAN NOT NULL DEFAULT false');
+  } catch {
+    try {
+      await q('ALTER TABLE users ADD COLUMN founder BOOLEAN NOT NULL DEFAULT false');
+    } catch {
+      /* ya existe */
+    }
+  }
 }
 
 const newKey = () => crypto.randomBytes(18).toString('base64url');
-const monthKey = (d = new Date()) => d.toISOString().slice(0, 7);
+// Periodos de uso en hora de México (UTC-6): mes "2026-11" y semana "2026-W46" (empieza el lunes).
+const mx = (d) => new Date(d.getTime() - 6 * 3600_000);
+const monthKey = (d = new Date()) => mx(d).toISOString().slice(0, 7);
+function weekKey(d = new Date()) {
+  const t = mx(d);
+  const day = (t.getUTCDay() + 6) % 7; // lunes = 0
+  // Semana ISO: la define el jueves de esa semana.
+  const thursday = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate() - day + 3);
+  const year = new Date(thursday).getUTCFullYear();
+  const week = Math.ceil(((thursday - Date.UTC(year, 0, 1)) / 864e5 + 1) / 7);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+const periodKey = (period) => (period === 'week' ? weekKey() : monthKey());
 
 // Convierte la fila de la BD en el objeto que usa la app.
 function hydrate(row) {
@@ -111,12 +133,14 @@ function hydrate(row) {
     settings: normalizeSettings(row.settings, row.plan),
     stripeCustomer: row.stripe_customer,
     stripeSub: row.stripe_sub,
+    founder: Boolean(row.founder),
   };
 }
 
 module.exports = {
   init,
   monthKey,
+  weekKey,
   close: () => pool.end(),
 
   // ---------- usuarios ----------
@@ -134,6 +158,8 @@ module.exports = {
   saveSettings: (id, settings) => q('UPDATE users SET settings = $1 WHERE id = $2', [JSON.stringify(settings), id]),
   setUsername: (id, name) => q('UPDATE users SET tiktok_username = $1 WHERE id = $2', [name, id]),
   setPlan: (id, plan) => q('UPDATE users SET plan = $1 WHERE id = $2', [plan, id]),
+  setFounder: (id) => q('UPDATE users SET founder = true WHERE id = $1', [id]),
+  countFounders: async () => Number((await one('SELECT COUNT(*) AS n FROM users WHERE founder = true')).n),
   setStripe: (id, customer, sub) =>
     q('UPDATE users SET stripe_customer = $1, stripe_sub = $2 WHERE id = $3', [customer, sub, id]),
   async rotateKey(id) {
@@ -159,14 +185,18 @@ module.exports = {
   purgeSessions: () => q('DELETE FROM sessions WHERE expires_at <= $1', [Date.now()]),
 
   // ---------- horas de LIVE ----------
-  addUsage: (userId, seconds) =>
-    q(
-      `INSERT INTO live_usage (user_id, month, seconds) VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, month) DO UPDATE SET seconds = live_usage.seconds + EXCLUDED.seconds`,
-      [userId, monthKey(), Math.round(seconds)]
-    ),
-  getUsageSeconds: async (userId) =>
-    (await one('SELECT seconds FROM live_usage WHERE user_id = $1 AND month = $2', [userId, monthKey()]))?.seconds || 0,
+  // Se guarda por mes y por semana, así cambiar el periodo de un plan no pierde el conteo.
+  async addUsage(userId, seconds) {
+    for (const key of [monthKey(), weekKey()]) {
+      await q(
+        `INSERT INTO live_usage (user_id, month, seconds) VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, month) DO UPDATE SET seconds = live_usage.seconds + EXCLUDED.seconds`,
+        [userId, key, Math.round(seconds)]
+      );
+    }
+  },
+  getUsageSeconds: async (userId, period = 'month') =>
+    (await one('SELECT seconds FROM live_usage WHERE user_id = $1 AND month = $2', [userId, periodKey(period)]))?.seconds || 0,
 
   // ---------- archivos subidos (sonidos e imágenes) ----------
   async addMedia(userId, { kind, mime, name, data }) {

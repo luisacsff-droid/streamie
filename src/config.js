@@ -32,6 +32,16 @@ const config = {
   stripeSecret: env.STRIPE_SECRET_KEY || '',
   stripePriceId: env.STRIPE_PRICE_ID || '',
   stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET || '',
+  // Precio de fundador: los primeros N clientes pagan menos, para siempre.
+  stripeFounderPriceId: env.STRIPE_FOUNDER_PRICE_ID || '',
+  founderSlots: Number(env.FOUNDER_SLOTS || 100),
+  // Solo para mostrar en la página; el cobro real lo define el precio en Stripe.
+  proPriceMxn: Number(env.PRO_PRICE_MXN || 119),
+  founderPriceMxn: Number(env.FOUNDER_PRICE_MXN || 99),
+
+  // Datos para términos y aviso de privacidad
+  legalName: env.LEGAL_NAME || '',
+  contactEmail: env.CONTACT_EMAIL || '',
 
   // Correos con acceso a /api/admin
   adminEmails: (env.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),

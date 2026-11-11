@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Panel · Mafy</title>
   <link rel="icon" type="image/png" href="/img/favicon.png">
-  <link rel="stylesheet" href="/styles.css?v=10">
-  <link rel="stylesheet" href="/dashboard.css?v=10">
+  <link rel="stylesheet" href="/styles.css?v=12">
+  <link rel="stylesheet" href="/dashboard.css?v=12">
 </head>
 <body>
   <header class="top">
@@ -20,7 +20,7 @@
         <div class="bar"><i id="usageBar"></i></div>
       </div>
       <span id="planPill" class="plan-pill"></span>
-      <button id="upgradeBtn" class="primary sm" hidden>Pasar a Pro</button>
+      <button id="upgradeBtn" class="primary sm" hidden>Pasar a Pro · $99 MXN/mes</button>
       <button id="portalBtn" class="ghost sm" hidden>Mi suscripción</button>
       <button id="logoutBtn" class="ghost sm">Salir</button>
     </div>
@@ -47,7 +47,8 @@
         <button role="tab" data-tab="alerts" aria-selected="false">Alertas</button>
         <button role="tab" data-tab="gifts" aria-selected="false">Regalos</button>
         <button role="tab" data-tab="stickers" aria-selected="false">Stickers</button>
-        <button role="tab" data-tab="events" aria-selected="false">Eventos</button>
+        <!-- Eventos: apagado por ahora. Para volver a mostrarlo, quita "hidden" aquí y en la caja "Eventos" de la derecha. -->
+        <button role="tab" data-tab="events" aria-selected="false" hidden>Eventos</button>
         <button role="tab" data-tab="tts" aria-selected="false">Voz</button>
         <button role="tab" data-tab="songs" aria-selected="false">Canciones</button>
         <button role="tab" data-tab="media" aria-selected="false">Archivos</button>
@@ -143,7 +144,7 @@
         </form>
       </section>
 
-      <section class="box" aria-labelledby="eventsTitle">
+      <section class="box" aria-labelledby="eventsTitle" hidden>
         <h2 id="eventsTitle">Eventos</h2>
         <label class="event-user"><span class="small muted">Para quién (opcional)</span><input id="eventUser" list="recentUsers" placeholder="nombre del viewer" autocomplete="off"></label>
         <datalist id="recentUsers"></datalist>
@@ -169,7 +170,11 @@
       </section>
     </aside>
   </main>
+  <footer class="app-footer">
+    <a href="/terminos" target="_blank" rel="noopener">Términos y condiciones</a>
+    <a href="/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
+  </footer>
 
-  <script src="/dashboard.js?v=10"></script>
+  <script src="/dashboard.js?v=12"></script>
 </body>
 </html>

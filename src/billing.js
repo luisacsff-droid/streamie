@@ -21,10 +21,29 @@ async function stripe(path, params) {
   return json;
 }
 
+// Precios para mostrar y cuántos lugares de fundador quedan.
+async function pricing() {
+  const founderOn = Boolean(config.stripeFounderPriceId);
+  const taken = founderOn ? await db.countFounders() : 0;
+  return {
+    enabled: enabled(),
+    normal: config.proPriceMxn,
+    founder: config.founderPriceMxn,
+    founderSlots: founderOn ? config.founderSlots : 0,
+    founderLeft: founderOn ? Math.max(0, config.founderSlots - taken) : 0,
+  };
+}
+
 async function checkoutUrl(user) {
+  // Quien ya fue fundador conserva su precio aunque haya cancelado y vuelva.
+  const p = await pricing();
+  const founder = Boolean(config.stripeFounderPriceId) && (user.founder || p.founderLeft > 0);
+  const tier = founder ? 'founder' : 'normal';
   const session = await stripe('checkout/sessions', {
     mode: 'subscription',
-    'line_items[0][price]': config.stripePriceId,
+    'line_items[0][price]': founder ? config.stripeFounderPriceId : config.stripePriceId,
+    'metadata[tier]': tier,
+    'subscription_data[metadata][tier]': tier,
     'line_items[0][quantity]': 1,
     client_reference_id: user.id,
     customer: user.stripeCustomer || undefined,
@@ -32,6 +51,7 @@ async function checkoutUrl(user) {
     success_url: `${config.baseUrl}/app?pago=ok`,
     cancel_url: `${config.baseUrl}/app?pago=cancelado`,
     allow_promotion_codes: 'true',
+    locale: 'es-419',
   });
   return session.url;
 }
@@ -76,6 +96,7 @@ async function handleEvent(event) {
       if (!user) return;
       await db.setStripe(user.id, obj.customer, obj.subscription);
       await db.setPlan(user.id, 'pro');
+      if (obj.metadata?.tier === 'founder') await db.setFounder(user.id);
       return user.id;
     }
     case 'customer.subscription.updated':
@@ -91,4 +112,4 @@ async function handleEvent(event) {
   }
 }
 
-module.exports = { enabled, checkoutUrl, portalUrl, verify, handleEvent };
+module.exports = { enabled, pricing, checkoutUrl, portalUrl, verify, handleEvent };

@@ -77,6 +77,10 @@
 .field.wide { grid-template-columns: 1fr; }
 .field.wide .control { justify-content: stretch; }
 
+.app-footer { max-width: 1280px; margin: 0 auto; padding: 8px 24px 32px; display: flex; gap: 20px; font-size: 13px; }
+.app-footer a { color: var(--muted); }
+.app-footer a:hover { color: var(--text); }
+
 /* visualizador */
 .viz { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; padding: 16px 0; align-items: start; }
 .viz-preview {

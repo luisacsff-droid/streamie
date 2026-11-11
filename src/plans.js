@@ -13,7 +13,7 @@ const PLANS = {
   free: {
     id: 'free',
     name: 'Free',
-    monthlyLiveHours: 20, // horas de conexión al LIVE por mes
+    liveHours: { hours: 5, period: 'week' }, // horas de conexión al LIVE (por semana o por mes)
     branding: true, // muestra la marca en los overlays
     tts: {
       premiumVoices: false,
@@ -39,10 +39,10 @@ const PLANS = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    monthlyLiveHours: 300, // uso justo
+    liveHours: { hours: 300, period: 'month' }, // uso justo
     branding: false,
     tts: {
-      premiumVoices: true,
+      premiumVoices: false, // voces naturales (Google TTS): apagadas por ahora
       maxChars: 300,
       modes: ['all', 'command', 'gifters'],
     },

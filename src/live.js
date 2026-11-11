@@ -66,9 +66,16 @@ function activeCount() {
   return n;
 }
 
+function limitMessage(user) {
+  const { hours, period } = getPlan(user.plan).liveHours;
+  return period === 'week'
+    ? `Usaste tus ${hours} horas de LIVE de esta semana. Se renuevan el lunes, o pásate a Pro para seguir.`
+    : `Usaste tus ${hours} horas de LIVE de este mes.`;
+}
+
 async function remainingSeconds(user) {
-  const limit = getPlan(user.plan).monthlyLiveHours * 3600;
-  return limit - (await db.getUsageSeconds(user.id));
+  const { hours, period } = getPlan(user.plan).liveHours;
+  return hours * 3600 - (await db.getUsageSeconds(user.id, period));
 }
 
 // La librería ha cambiado nombres de campos entre versiones (v2: comment/giftDetails,
@@ -169,7 +176,7 @@ async function attempt(userId) {
   if (!user) return stop(userId);
 
   if ((await remainingSeconds(user)) <= 0) {
-    return stop(userId, 'Se acabaron tus horas del mes. Pásate a Pro para seguir.');
+    return stop(userId, limitMessage(user));
   }
   if (activeCount() >= config.maxConnections) {
     setStatus(userId, 'waiting', 'Servidor lleno, reintentando en un minuto…');
@@ -225,7 +232,7 @@ async function attempt(userId) {
 async function start(user) {
   const username = (user.tiktokUsername || '').replace(/^@/, '').trim();
   if (!username) throw new Error('Primero guarda tu usuario de TikTok.');
-  if ((await remainingSeconds(user)) <= 0) throw new Error('Se acabaron tus horas del mes.');
+  if ((await remainingSeconds(user)) <= 0) throw new Error(limitMessage(user));
 
   stop(user.id, '', true);
   const l = { username, status: 'connecting', message: '', startedAt: Date.now(), errors: 0, stopping: false };
@@ -237,7 +244,7 @@ async function start(user) {
     try {
       await db.addUsage(user.id, USAGE_TICK_MS / 1000);
       const fresh = await db.getUser(user.id);
-      if (fresh && (await remainingSeconds(fresh)) <= 0) stop(user.id, 'Se acabaron tus horas del mes.');
+      if (fresh && (await remainingSeconds(fresh)) <= 0) stop(user.id, limitMessage(fresh));
     } catch (err) {
       console.warn('[live] no se pudo registrar el uso:', err.message);
     }

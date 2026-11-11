@@ -111,10 +111,11 @@
       { group: 'Voz' },
       {
         path: 'tts.voice', type: 'select', label: 'Voz',
-        hint: () => (me.features.premiumTts ? '' : 'Las voces naturales se activan cuando el administrador configura Google TTS.'),
+        hint: () => '',
         options: (p) => [
           { value: 'browser', label: 'Voz del navegador (gratis)' },
-          ...me.voices.map((v) => ({ value: v.id, label: v.label, disabled: !p.tts.premiumVoices || !me.features.premiumTts, pro: true })),
+          // Las voces naturales solo aparecen cuando están activas en el plan y en el servidor.
+          ...(p.tts.premiumVoices && me.features.premiumTts ? me.voices.map((v) => ({ value: v.id, label: v.label })) : []),
         ],
       },
       { path: 'tts.rate', type: 'range', min: 0.5, max: 2, step: 0.1, label: 'Velocidad', fmt: (v) => Number(v).toFixed(1) + '×' },
@@ -265,10 +266,15 @@
     $('planPill').textContent = pro ? 'Pro' : 'Free';
     $('planPill').classList.toggle('pro', pro);
     $('upgradeBtn').hidden = pro || !me.features.billing;
+    const pr = me.pricing || {};
+    const founderPrice = pr.isFounder || pr.founderLeft > 0;
+    $('upgradeBtn').textContent = founderPrice
+      ? `Pasar a Pro · $${pr.founder} MXN/mes (fundador)`
+      : `Pasar a Pro · $${pr.normal} MXN/mes`;
     $('portalBtn').hidden = !pro || !me.features.billing;
     const used = me.usage.usedSeconds / 3600;
     const limit = me.usage.limitSeconds / 3600;
-    $('usageText').textContent = `${used.toFixed(1)} de ${limit} h de LIVE este mes`;
+    $('usageText').textContent = `${used.toFixed(1)} de ${limit} h de LIVE ${me.usage.period === 'week' ? 'esta semana' : 'este mes'}`;
     $('usageBar').style.width = Math.min(100, (used / limit) * 100) + '%';
     $('urlAlerts').value = me.overlays.alerts;
     $('urlPlayer').value = me.overlays.player;

@@ -78,7 +78,7 @@ function overlayUrls(user) {
 
 async function me(user) {
   const plan = getPlan(user.plan);
-  const used = await db.getUsageSeconds(user.id);
+  const used = await db.getUsageSeconds(user.id, plan.liveHours.period);
   return {
     email: user.email,
     plan: plan.id,
@@ -88,7 +88,7 @@ async function me(user) {
     settings: user.settings,
     overlayKey: user.overlayKey,
     overlays: overlayUrls(user),
-    usage: { usedSeconds: used, limitSeconds: plan.monthlyLiveHours * 3600 },
+    usage: { usedSeconds: used, limitSeconds: plan.liveHours.hours * 3600, period: plan.liveHours.period },
     voices: PREMIUM_VOICES,
     features: {
       billing: billing.enabled(),
@@ -98,6 +98,7 @@ async function me(user) {
     },
     live: live.publicStatus(user.id),
     isAdmin: config.adminEmails.includes(user.email),
+    pricing: { ...(await billing.pricing()), isFounder: user.founder },
     appName: config.appName,
   };
 }
@@ -165,6 +166,9 @@ app.post('/api/logout', async (req, res) => {
   res.clearCookie(COOKIE);
   res.json({ ok: true });
 });
+
+// Precios públicos (para la página principal).
+app.get('/api/pricing', async (req, res) => res.json(await billing.pricing()));
 
 app.get('/api/me', auth, async (req, res) => res.json(await me(req.user)));
 
@@ -404,6 +408,35 @@ app.get('/app', (req, res) => res.sendFile(path.join(PUBLIC, 'dashboard.html')))
 app.get('/o/alerts', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-alerts.html')));
 app.get('/o/player', (req, res) => res.sendFile(path.join(PUBLIC, 'player.html')));
 app.get('/o/songs', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-songs.html')));
+// Términos y aviso de privacidad, con los datos de contacto y precios actuales.
+const fs = require('fs');
+const LEGAL_UPDATED = '11 de noviembre de 2026';
+const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function legalPage(file, title) {
+  return (req, res) => {
+    const dir = path.join(__dirname, 'legal');
+    const email = config.contactEmail
+      ? `<a href="mailto:${escHtml(config.contactEmail)}">${escHtml(config.contactEmail)}</a>`
+      : '<b>[correo de contacto pendiente]</b>';
+    const vars = {
+      TITLE: title,
+      UPDATED: LEGAL_UPDATED,
+      LEGAL_NAME: escHtml(config.legalName || 'el equipo de Mafy'),
+      CONTACT_EMAIL: email,
+      PRO_PRICE: config.proPriceMxn,
+      FOUNDER_PRICE: config.founderPriceMxn,
+      FOUNDER_SLOTS: config.founderSlots,
+      FREE_HOURS: PLANS.free.liveHours.hours,
+    };
+    const fill = (t) => t.replace(/\{\{(\w+)\}\}/g, (_, k) => (k in vars ? String(vars[k]) : ''));
+    vars.BODY = fill(fs.readFileSync(path.join(dir, file), 'utf8'));
+    const html = fill(fs.readFileSync(path.join(dir, 'layout.html'), 'utf8'));
+    res.set('Cache-Control', 'no-cache').type('html').send(html);
+  };
+}
+app.get('/terminos', legalPage('terminos.html', 'Términos y condiciones'));
+app.get('/privacidad', legalPage('privacidad.html', 'Aviso de privacidad'));
+
 app.get('/o/visualizer', (req, res) => res.sendFile(path.join(PUBLIC, 'overlay-visualizer.html')));
 // Código y estilos: el navegador siempre pregunta si hay versión nueva (así una actualización
 // no se mezcla con archivos viejos guardados). Imágenes: se guardan un día.
