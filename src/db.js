@@ -123,14 +123,16 @@ const periodKey = (period) => (period === 'week' ? weekKey() : monthKey());
 // Convierte la fila de la BD en el objeto que usa la app.
 function hydrate(row) {
   if (!row) return null;
+  // Los correos de ADMIN_EMAILS (el dueño) siempre tienen Pro, sin pagar.
+  const plan = config.adminEmails.includes(row.email) ? 'pro' : row.plan;
   return {
     id: row.id,
     email: row.email,
     passHash: row.pass_hash,
-    plan: row.plan,
+    plan,
     tiktokUsername: row.tiktok_username,
     overlayKey: row.overlay_key,
-    settings: normalizeSettings(row.settings, row.plan),
+    settings: normalizeSettings(row.settings, plan),
     stripeCustomer: row.stripe_customer,
     stripeSub: row.stripe_sub,
     founder: Boolean(row.founder),
