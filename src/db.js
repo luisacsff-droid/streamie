@@ -124,7 +124,9 @@ const periodKey = (period) => (period === 'week' ? weekKey() : monthKey());
 function hydrate(row) {
   if (!row) return null;
   // Los correos de ADMIN_EMAILS (el dueño) siempre tienen Pro, sin pagar.
-  const plan = config.adminEmails.includes(row.email) ? 'pro' : row.plan;
+  // También los de PRO_EMAILS (Pro gratis, sin ser administradores).
+  const freePro = config.adminEmails.includes(row.email) || config.proEmails.includes(row.email);
+  const plan = freePro ? 'pro' : row.plan;
   return {
     id: row.id,
     email: row.email,

@@ -44,6 +44,8 @@ const config = {
   contactEmail: env.CONTACT_EMAIL || '',
 
   // Correos con acceso a /api/admin
+  // Correos con Pro gratis, sin permisos de administrador (amigos, streamers de prueba, socios).
+  proEmails: (env.PRO_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   adminEmails: (env.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 };
 
