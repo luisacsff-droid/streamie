@@ -91,6 +91,24 @@ const toUser = (u = {}) => {
   };
 };
 
+// TikTok puede volver a mandar mensajes ya recibidos (sobre todo al reconectar). Se descartan
+// los repetidos (por msgId) y los viejos (más de 2 min), para que la voz no lea chat atrasado.
+const STALE_MS = 2 * 60_000;
+function isRepeatOrOld(userId, d) {
+  const l = lives.get(userId);
+  const common = d?.common || {};
+  let t = Number(common.createTime || d?.createTime || 0);
+  if (t && t < 1e12) t *= 1000; // a veces viene en segundos
+  if (t && Date.now() - t > STALE_MS) return true;
+  const id = String(common.msgId || d?.msgId || '');
+  if (!l || !id || id === '0') return false;
+  if (!l.seenMsgs) l.seenMsgs = new Set();
+  if (l.seenMsgs.has(id)) return true;
+  l.seenMsgs.add(id);
+  if (l.seenMsgs.size > 2000) l.seenMsgs.delete(l.seenMsgs.values().next().value);
+  return false;
+}
+
 function wire(userId, conn) {
   const emit = (event) => pipeline.handleEvent(userId, event);
 
@@ -104,6 +122,7 @@ function wire(userId, conn) {
   };
 
   conn.on(WebcastEvent.CHAT, (d) => {
+    if (isRepeatOrOld(userId, d)) return;
     const user = toUser(d.user);
     emitStickers(user, d.emotes);
     const comment = d.content ?? d.comment ?? '';
@@ -111,13 +130,14 @@ function wire(userId, conn) {
     emit({ kind: 'chat', user, comment });
   });
 
-  conn.on(WebcastEvent.EMOTE, (d) => emitStickers(toUser(d.user), d.emoteList || d.emotes));
+  conn.on(WebcastEvent.EMOTE, (d) => !isRepeatOrOld(userId, d) && emitStickers(toUser(d.user), d.emoteList || d.emotes));
 
   conn.on(WebcastEvent.GIFT, (d) => {
     const g = d.gift || d.giftDetails || {};
     const type = g.type ?? g.giftType;
     // Los regalos en racha (tipo 1) llegan varias veces; solo se procesa el final.
     if (type === 1 && !d.repeatEnd) return;
+    if (isRepeatOrOld(userId, d)) return;
     emit({
       kind: 'gift',
       user: toUser(d.user),

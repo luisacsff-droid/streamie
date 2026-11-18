@@ -108,25 +108,34 @@
     $('testVoice').onclick = () => enqueueTts({ text: 'Hola, así sonará tu chat.', voice: 'browser', rate: 1, volume: 1 });
 
     // ----- TTS en cola (baja la música mientras habla) -----
+    // Un mensaje que esperó más de 40 s ya no se lee: llegaría fuera de contexto.
+    const TTS_MAX_WAIT_MS = 40000;
     function enqueueTts(msg) {
       if (ttsQueue.length >= 20) ttsQueue.shift();
-      ttsQueue.push(msg);
+      ttsQueue.push({ ...msg, receivedAt: Date.now() });
       nextTts();
     }
     function duck(on) {
       if (player && ytReady) player.setVolume(on ? Math.round(musicVolume * 0.3) : musicVolume);
     }
     function nextTts() {
-      if (speaking || !ttsQueue.length) return;
+      if (speaking) return;
+      while (ttsQueue.length && Date.now() - ttsQueue[0].receivedAt > TTS_MAX_WAIT_MS) ttsQueue.shift();
+      if (!ttsQueue.length) return;
       const msg = ttsQueue.shift();
       speaking = true;
       $('speaking').textContent = '🗣️ ' + msg.text;
       duck(true);
+      let finished = false;
       const done = () => {
+        if (finished) return;
+        finished = true;
         speaking = false;
         $('speaking').textContent = '';
         duck(false);
-        setTimeout(nextTts, 250);
+        // Sin setTimeout: con la pestaña en segundo plano Chrome retrasa los temporizadores
+        // hasta un minuto y los mensajes se acumulaban para leerse de golpe después.
+        Promise.resolve().then(nextTts);
       };
       if (msg.audio) {
         const a = new Audio('data:audio/mp3;base64,' + msg.audio);
@@ -144,8 +153,15 @@
       u.volume = msg.volume;
       u.onend = done;
       u.onerror = done;
+      // Limpia lo que el navegador tuviera atorado de antes, para que no lo lea más tarde.
+      if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+      speechSynthesis.resume();
       speechSynthesis.speak(u);
-      setTimeout(() => speaking && done(), 30000); // seguro por si el navegador no avisa
+      setTimeout(() => {
+        if (finished) return;
+        speechSynthesis.cancel(); // el navegador no avisó: se descarta para que no salga después
+        done();
+      }, 30000);
     }
 
     // ----- YouTube -----
