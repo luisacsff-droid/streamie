@@ -272,7 +272,7 @@
     $('upgradeBtn').textContent = founderPrice
       ? `Pasar a Pro · $${pr.founder} MXN/mes (fundador)`
       : `Pasar a Pro · $${pr.normal} MXN/mes`;
-    $('portalBtn').hidden = !pro || !me.features.billing;
+    $('portalBtn').hidden = !me.features.billing || !me.subscription?.has;
     const used = me.usage.usedSeconds / 3600;
     const limit = me.usage.limitSeconds / 3600;
     $('usageText').textContent = `${used.toFixed(1)} de ${limit} h de LIVE ${me.usage.period === 'week' ? 'esta semana' : 'este mes'}`;
@@ -905,20 +905,96 @@
   }
 
   // ---------- pagos y sesión ----------
-  $('upgradeBtn').addEventListener('click', async () => {
+  const fmtDate = (t) => new Date(t).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+  for (const d of document.querySelectorAll('dialog.modal')) {
+    d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => d.close()));
+  }
+  function openPay() {
+    const pr = me.pricing || {};
+    const founder = pr.isFounder || pr.founderLeft > 0;
+    $('payPrice').innerHTML = founder
+      ? `<s>$${pr.normal}</s>$${pr.founder} MXN al mes <span class="small muted">· precio de fundador para siempre</span>`
+      : `$${pr.normal} MXN al mes`;
+    $('payerEmail').value = me.email || '';
+    $('subDialog').close();
+    $('payDialog').showModal();
+  }
+  $('upgradeBtn').addEventListener('click', openPay);
+  $('payForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('payGo');
+    btn.disabled = true;
+    btn.textContent = 'Abriendo Mercado Pago…';
     try {
-      location.href = (await post('/billing/checkout')).url;
+      location.href = (await post('/billing/checkout', { payerEmail: $('payerEmail').value })).url;
     } catch (err) {
       toast(err.message, true);
+      btn.disabled = false;
+      btn.textContent = 'Ir a Mercado Pago';
     }
   });
+
+  function renderSub(st) {
+    const body = $('subBody');
+    $('subCancel').hidden = st.status !== 'authorized';
+    $('subRenew').hidden = st.status === 'authorized';
+    if (st.status === 'authorized') {
+      body.innerHTML = `<p><b>Activa</b> · $${esc(st.amount)} MXN al mes${st.founder ? ' (precio de fundador)' : ''}</p>` +
+        (st.nextPayment ? `<p class="small muted">Próximo cobro: ${esc(fmtDate(st.nextPayment))}</p>` : '');
+    } else if (st.plan === 'pro' && st.proUntil) {
+      body.innerHTML = `<p><b>Cancelada.</b> Conservas Pro hasta el <b>${esc(fmtDate(st.proUntil))}</b>; después tu cuenta pasa a Free y no se te vuelve a cobrar.</p><p class="small muted">Si quieres seguir en Pro, vuelve a suscribirte a partir de esa fecha para no pagar dos veces el mismo mes.</p>`;
+      $('subRenew').hidden = true;
+    } else if (st.plan === 'pro') {
+      body.innerHTML = '<p>Tienes Pro sin una suscripción de pago.</p>';
+      $('subRenew').hidden = true;
+    } else {
+      body.innerHTML = '<p>No tienes una suscripción activa.</p>';
+    }
+  }
   $('portalBtn').addEventListener('click', async () => {
+    $('subBody').innerHTML = '<p class="muted">Revisando con Mercado Pago…</p>';
+    $('subCancel').hidden = $('subRenew').hidden = true;
+    $('subDialog').showModal();
     try {
-      location.href = (await post('/billing/portal')).url;
+      renderSub(await post('/billing/sync'));
+    } catch (err) {
+      $('subBody').innerHTML = `<p>${esc(err.message)}</p>`;
+    }
+  });
+  $('subCancel').addEventListener('click', async () => {
+    if (!confirm('¿Cancelar tu suscripción? Conservas Pro hasta el final del mes que ya pagaste.')) return;
+    try {
+      renderSub(await post('/billing/cancel'));
+      await refreshMe();
+      toast('Suscripción cancelada.');
     } catch (err) {
       toast(err.message, true);
     }
   });
+  $('subRenew').addEventListener('click', openPay);
+
+  // Al volver de Mercado Pago: el aviso puede tardar unos segundos, así que se revisa unas veces.
+  async function checkReturnFromPayment() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('pago') !== 'ok') return;
+    history.replaceState(null, '', location.pathname);
+    if (me.plan === 'pro' && !me.subscription?.proUntil) return toast('¡Listo! Ya tienes Pro.');
+    toast('Confirmando tu pago con Mercado Pago…');
+    for (let i = 0; i < 6; i++) {
+      try {
+        const st = await post('/billing/sync');
+        if (st.status === 'authorized') {
+          await refreshMe(true);
+          return toast('¡Listo! Ya tienes Pro.');
+        }
+      } catch {
+        /* se reintenta */
+      }
+      await new Promise((r) => setTimeout(r, 4000));
+    }
+    toast('Tu pago aún no se confirma. Si ya pagaste, recarga en unos minutos.', true);
+  }
+
   $('logoutBtn').addEventListener('click', async () => {
     await post('/logout');
     location.href = '/';
@@ -937,9 +1013,8 @@
     log.forEach((e) => addLog(e, false));
     [...log].reverse().forEach((e) => rememberUser(e.user));
     connectWs();
-    const q = new URLSearchParams(location.search).get('pago');
-    if (q === 'ok') toast('¡Listo! Tu plan Pro se activa en unos segundos.');
-    if (q) history.replaceState(null, '', '/app');
+    checkReturnFromPayment();
+    if (new URLSearchParams(location.search).has('pago')) history.replaceState(null, '', location.pathname);
   })().catch((err) => toast(err.message, true));
 
   setInterval(() => refreshMe().catch(() => {}), 120_000);

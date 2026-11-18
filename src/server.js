@@ -99,23 +99,10 @@ async function me(user) {
     live: live.publicStatus(user.id),
     isAdmin: config.adminEmails.includes(user.email),
     pricing: { ...(await billing.pricing()), isFounder: user.founder },
+    subscription: { has: Boolean(user.mpSub) && user.plan === 'pro', proUntil: user.proUntil },
     appName: config.appName,
   };
 }
-
-// ---------- webhook de Stripe (necesita el cuerpo crudo, va antes de express.json) ----------
-app.post(
-  '/api/billing/webhook',
-  express.raw({ type: 'application/json', limit: '1mb' }),
-  async (req, res) => {
-    if (!config.stripeWebhookSecret) return res.status(400).send('webhook no configurado');
-    const raw = req.body.toString('utf8');
-    if (!billing.verify(raw, req.get('stripe-signature'))) return res.status(400).send('firma inválida');
-    const userId = await billing.handleEvent(JSON.parse(raw));
-    if (userId) pipeline.pushConfig(userId);
-    res.json({ received: true });
-  }
-);
 
 app.use(express.json({ limit: '64kb' }));
 app.use(cookieParser());
@@ -124,7 +111,8 @@ app.use(cookieParser());
 app.use('/api', (req, res, next) => {
   // Excepción: subir archivos manda el audio/imagen tal cual (el navegador exige permiso previo para eso).
   const isUpload = req.method === 'POST' && req.path === '/media' && (req.is('audio/*') || req.is('image/*'));
-  if (req.method !== 'GET' && !isUpload && !req.is('application/json')) {
+  const isWebhook = req.path === '/billing/webhook'; // Mercado Pago
+  if (req.method !== 'GET' && !isUpload && !isWebhook && !req.is('application/json')) {
     return res.status(415).json({ error: 'Se esperaba JSON.' });
   }
   next();
@@ -363,19 +351,58 @@ app.post('/api/songs/:action', auth, (req, res) => {
 app.post(
   '/api/billing/checkout',
   auth,
+  rateLimit(10, 15 * 60_000),
   wrap(async (req, res) => {
     if (!billing.enabled()) throw new HttpError(400, 'Los pagos aún no están configurados.');
-    res.json({ url: await billing.checkoutUrl(req.user) });
+    try {
+      res.json({ url: await billing.checkoutUrl(req.user, req.body.payerEmail) });
+    } catch (err) {
+      throw new HttpError(400, err.message);
+    }
   })
 );
+// Estado de la suscripción (se revisa con Mercado Pago en el momento).
 app.post(
-  '/api/billing/portal',
+  '/api/billing/sync',
   auth,
   wrap(async (req, res) => {
     if (!billing.enabled()) throw new HttpError(400, 'Los pagos aún no están configurados.');
-    res.json({ url: await billing.portalUrl(req.user) });
+    try {
+      const st = await billing.sync(req.user);
+      pipeline.pushConfig(req.user.id);
+      res.json(st);
+    } catch (err) {
+      throw new HttpError(502, err.message);
+    }
   })
 );
+app.post(
+  '/api/billing/cancel',
+  auth,
+  wrap(async (req, res) => {
+    if (!billing.enabled()) throw new HttpError(400, 'Los pagos aún no están configurados.');
+    try {
+      const st = await billing.cancel(req.user);
+      pipeline.pushConfig(req.user.id);
+      res.json(st);
+    } catch (err) {
+      throw new HttpError(400, err.message);
+    }
+  })
+);
+// Avisos de Mercado Pago. Responde 200 rápido; la suscripción se vuelve a pedir a la API.
+app.post('/api/billing/webhook', async (req, res) => {
+  if (!billing.enabled()) return res.status(200).end();
+  if (!billing.verify(req.headers, req.query)) console.warn('[billing] aviso con firma inválida (se revisa con la API de todas formas)');
+  try {
+    const userId = await billing.handleNotification(req.query, req.body);
+    if (userId) pipeline.pushConfig(userId);
+  } catch (err) {
+    console.warn('[billing] webhook:', err.message);
+    return res.status(500).end(); // Mercado Pago lo reintentará
+  }
+  res.status(200).json({ received: true });
+});
 
 // ---------- administración ----------
 app.post('/api/admin/plan', auth, async (req, res) => {

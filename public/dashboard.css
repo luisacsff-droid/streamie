@@ -213,3 +213,13 @@
 .auto-approve > span:last-child { display: grid; gap: 1px; font-size: 14px; }
 .auto-approve.on { outline: 1px solid var(--accent, #b6ff1f); }
 .auto-approve.locked { cursor: default; opacity: .7; }
+
+.modal { max-width: 440px; width: calc(100vw - 32px); padding: 22px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--panel); color: inherit; }
+.modal::backdrop { background: rgba(0, 0, 0, .7); }
+.modal h2 { margin: 0 0 8px; }
+.modal p { margin: 0 0 12px; }
+.modal input[type='email'] { width: 100%; margin: 6px 0 6px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.pay-price { font: 800 22px var(--display); color: var(--spark); }
+.pay-price s { color: var(--muted); font-size: 16px; margin-right: 6px; }
+.sub-body p { margin: 0 0 8px; }

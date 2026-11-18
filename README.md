@@ -61,7 +61,7 @@ Para probar el plan Pro sin pagos: `npm run set-plan -- tu@correo.com pro`
 | `MAX_CONNECTIONS` | Tope de streamers conectados a la vez (según tu plan de Euler) | No (20) | — |
 | `GOOGLE_TTS_API_KEY` | Voces naturales (apagadas por ahora en `src/plans.js`) | No | Google Cloud → habilitar *Cloud Text-to-Speech API* → API key |
 | `YOUTUBE_API_KEY` | Buscar canciones por nombre (`!sr bad bunny`) | No; sin ella solo se aceptan links | Google Cloud → habilitar *YouTube Data API v3* → API key |
-| `STRIPE_*` | Cobrar el plan Pro | No | Stripe → Productos (precio recurrente) + Webhooks |
+| `MP_ACCESS_TOKEN` | Cobrar el plan Pro | No | Mercado Pago → Tus integraciones → Credenciales |
 | `ADMIN_EMAILS` | Cambiar planes desde `/api/admin/plan` | No | — |
 
 **Restringe las llaves de Google** en la consola a la API correspondiente.
@@ -81,11 +81,12 @@ Netlify/Vercel **no sirven** para el servidor: necesita mantener conexiones abie
 
 Render (con disco persistente) o un VPS con `pm2` funcionan igual.
 
-### Stripe
+### Mercado Pago
 
-1. Crea un producto “Pro” con precio mensual → copia el `price_…` a `STRIPE_PRICE_ID`.
-2. Webhook → `https://tu-dominio/api/billing/webhook` con los eventos `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` → copia el secreto a `STRIPE_WEBHOOK_SECRET`.
-3. Activa el *Customer portal* en Stripe para que los usuarios cancelen solos.
+1. En Mercado Pago Developers → *Tus integraciones*, crea una aplicación (producto: Suscripciones).
+2. Copia el **Access Token de producción** a `MP_ACCESS_TOKEN`. Los precios salen de `PRO_PRICE_MXN` y `FOUNDER_PRICE_MXN`.
+3. En la aplicación → *Webhooks*: URL `https://tu-dominio/api/billing/webhook`, eventos **Planes y suscripciones**. Opcional: copia la clave secreta a `MP_WEBHOOK_SECRET`.
+4. El panel también revisa el pago al volver de Mercado Pago, así que funciona aunque el aviso tarde.
 
 ## Cómo lo usa el streamer
 

@@ -94,11 +94,17 @@ const SCHEMA = [
 async function init() {
   for (const sql of SCHEMA) await q(sql);
   // Columnas agregadas después (no fallan si ya existen).
+  await addColumn('founder', 'BOOLEAN NOT NULL DEFAULT false');
+  await addColumn('mp_sub', 'TEXT'); // id de la suscripción en Mercado Pago
+  await addColumn('pro_until', 'BIGINT'); // Pro canceló: se conserva hasta esta fecha (ms)
+}
+
+async function addColumn(name, type) {
   try {
-    await q('ALTER TABLE users ADD COLUMN IF NOT EXISTS founder BOOLEAN NOT NULL DEFAULT false');
+    await q(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${name} ${type}`);
   } catch {
     try {
-      await q('ALTER TABLE users ADD COLUMN founder BOOLEAN NOT NULL DEFAULT false');
+      await q(`ALTER TABLE users ADD COLUMN ${name} ${type}`);
     } catch {
       /* ya existe */
     }
@@ -126,7 +132,9 @@ function hydrate(row) {
   // Los correos de ADMIN_EMAILS (el dueño) siempre tienen Pro, sin pagar.
   // También los de PRO_EMAILS (Pro gratis, sin ser administradores).
   const freePro = config.adminEmails.includes(row.email) || config.proEmails.includes(row.email);
-  const plan = freePro ? 'pro' : row.plan;
+  // Quien canceló conserva Pro hasta el final del periodo pagado (pro_until).
+  const expired = row.plan === 'pro' && row.pro_until && Number(row.pro_until) < Date.now();
+  const plan = freePro ? 'pro' : expired ? 'free' : row.plan;
   return {
     id: row.id,
     email: row.email,
@@ -135,8 +143,8 @@ function hydrate(row) {
     tiktokUsername: row.tiktok_username,
     overlayKey: row.overlay_key,
     settings: normalizeSettings(row.settings, plan),
-    stripeCustomer: row.stripe_customer,
-    stripeSub: row.stripe_sub,
+    mpSub: row.mp_sub || null,
+    proUntil: row.pro_until ? Number(row.pro_until) : null,
     founder: Boolean(row.founder),
   };
 }
@@ -158,14 +166,16 @@ module.exports = {
   getUser: async (id) => hydrate(await one('SELECT * FROM users WHERE id = $1', [id])),
   getUserByEmail: async (email) => hydrate(await one('SELECT * FROM users WHERE email = $1', [email])),
   getUserByKey: async (key) => hydrate(await one('SELECT * FROM users WHERE overlay_key = $1', [key])),
-  getUserByCustomer: async (c) => hydrate(await one('SELECT * FROM users WHERE stripe_customer = $1', [c])),
   saveSettings: (id, settings) => q('UPDATE users SET settings = $1 WHERE id = $2', [JSON.stringify(settings), id]),
   setUsername: (id, name) => q('UPDATE users SET tiktok_username = $1 WHERE id = $2', [name, id]),
-  setPlan: (id, plan) => q('UPDATE users SET plan = $1 WHERE id = $2', [plan, id]),
+  setPlan: (id, plan) => q('UPDATE users SET plan = $1, pro_until = NULL WHERE id = $2', [plan, id]),
+  // Estado de la suscripción de Mercado Pago: plan, id de la suscripción y fin del periodo pagado si canceló.
+  setSubscription: (id, { plan, mpSub, proUntil }) =>
+    q('UPDATE users SET plan = $1, mp_sub = $2, pro_until = $3 WHERE id = $4', [plan, mpSub, proUntil, id]),
+  getStoredPlan: async (id) => (await one('SELECT plan FROM users WHERE id = $1', [id]))?.plan,
+  setMpSub: (id, mpSub) => q('UPDATE users SET mp_sub = $1 WHERE id = $2', [mpSub, id]),
   setFounder: (id) => q('UPDATE users SET founder = true WHERE id = $1', [id]),
   countFounders: async () => Number((await one('SELECT COUNT(*) AS n FROM users WHERE founder = true')).n),
-  setStripe: (id, customer, sub) =>
-    q('UPDATE users SET stripe_customer = $1, stripe_sub = $2 WHERE id = $3', [customer, sub, id]),
   async rotateKey(id) {
     const key = newKey();
     await q('UPDATE users SET overlay_key = $1 WHERE id = $2', [key, id]);

@@ -1,5 +1,5 @@
 // Uso: npm run set-plan -- correo@ejemplo.com pro
-// Cambia el plan de un usuario a mano (útil para pruebas o pagos fuera de Stripe).
+// Cambia el plan de un usuario a mano (útil para pruebas o pagos fuera de Mercado Pago).
 // Necesita DATABASE_URL apuntando a la misma base que usa el servidor.
 const db = require('../src/db');
 const { PLANS } = require('../src/plans');

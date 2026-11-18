@@ -28,14 +28,13 @@ const config = {
   // Song request (YouTube Data API v3)
   youtubeKey: env.YOUTUBE_API_KEY || '',
 
-  // Stripe (opcional; sin estas llaves el botón de pago se oculta)
-  stripeSecret: env.STRIPE_SECRET_KEY || '',
-  stripePriceId: env.STRIPE_PRICE_ID || '',
-  stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET || '',
+  // Mercado Pago (opcional; sin MP_ACCESS_TOKEN el botón de pago se oculta)
+  mpAccessToken: env.MP_ACCESS_TOKEN || '',
+  // Opcional: clave secreta de los webhooks para comprobar la firma.
+  mpWebhookSecret: env.MP_WEBHOOK_SECRET || '',
   // Precio de fundador: los primeros N clientes pagan menos, para siempre.
-  stripeFounderPriceId: env.STRIPE_FOUNDER_PRICE_ID || '',
   founderSlots: Number(env.FOUNDER_SLOTS || 100),
-  // Solo para mostrar en la página; el cobro real lo define el precio en Stripe.
+  // Precios mensuales en MXN: se muestran en la página y son lo que se cobra.
   proPriceMxn: Number(env.PRO_PRICE_MXN || 119),
   founderPriceMxn: Number(env.FOUNDER_PRICE_MXN || 99),
 

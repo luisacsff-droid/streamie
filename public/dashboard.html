@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Panel · Mafy</title>
   <link rel="icon" type="image/png" href="/img/favicon.png">
-  <link rel="stylesheet" href="/styles.css?v=13">
-  <link rel="stylesheet" href="/dashboard.css?v=13">
+  <link rel="stylesheet" href="/styles.css?v=14">
+  <link rel="stylesheet" href="/dashboard.css?v=14">
 </head>
 <body>
   <header class="top">
@@ -179,6 +179,31 @@
     <a href="/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
   </footer>
 
-  <script src="/dashboard.js?v=13"></script>
+
+  <dialog id="payDialog" class="modal" aria-labelledby="payTitle">
+    <form method="dialog" id="payForm">
+      <h2 id="payTitle">Pasar a Pro</h2>
+      <p id="payPrice" class="pay-price"></p>
+      <p class="small muted">Pagas con Mercado Pago: tarjeta de débito o crédito, o tu saldo de Mercado Pago. Se cobra cada mes y puedes cancelar cuando quieras desde “Mi suscripción”.</p>
+      <label class="label" for="payerEmail">Correo de tu cuenta de Mercado Pago</label>
+      <input id="payerEmail" type="email" autocomplete="email" required>
+      <p class="small muted">Usa el mismo correo con el que vas a pagar en Mercado Pago; si es otro, Mercado Pago rechaza el pago.</p>
+      <div class="modal-actions">
+        <button type="button" class="ghost" data-close>Cancelar</button>
+        <button type="submit" class="primary" id="payGo">Ir a Mercado Pago</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="subDialog" class="modal" aria-labelledby="subTitle">
+    <h2 id="subTitle">Mi suscripción</h2>
+    <div id="subBody" class="sub-body"><p class="muted">Revisando con Mercado Pago…</p></div>
+    <div class="modal-actions">
+      <button type="button" class="ghost danger" id="subCancel" hidden>Cancelar suscripción</button>
+      <button type="button" class="primary" id="subRenew" hidden>Volver a suscribirme</button>
+      <button type="button" class="ghost" data-close>Cerrar</button>
+    </div>
+  </dialog>
+  <script src="/dashboard.js?v=14"></script>
 </body>
 </html>
