@@ -246,6 +246,7 @@
     try {
       me = await api('/settings', 'PUT', buildPatch(path, value));
       if (path.startsWith('visualizer.')) updateVizPreview();
+      if (path === 'songs.requireApproval') renderAutoApprove();
       const stored = getPath(me.settings, path);
       if (JSON.stringify(stored) !== JSON.stringify(value)) {
         toast('Ajustado al límite de tu plan.');
@@ -391,6 +392,31 @@
       toast(err.message, true);
     }
   }
+  // Interruptor rápido "Aprobar todo": es el mismo ajuste que "Aprobar cada canción", al revés.
+  function renderAutoApprove() {
+    const locked = me.planInfo.songs.forceApproval;
+    const on = !locked && !me.settings.songs.requireApproval;
+    const input = $('autoApprove');
+    input.checked = on;
+    input.disabled = locked;
+    $('autoApproveRow').classList.toggle('on', on);
+    $('autoApproveRow').classList.toggle('locked', locked);
+    $('autoApproveHint').textContent = locked
+      ? 'Disponible en Pro. En Free cada canción se aprueba a mano.'
+      : on
+        ? 'Activo: todo lo que pidan suena sin esperar. Apágalo si llegan desconocidos.'
+        : 'Apagado: tú apruebas cada canción.';
+  }
+  $('autoApprove').addEventListener('change', async () => {
+    const on = $('autoApprove').checked;
+    await save('songs.requireApproval', !on);
+    renderFields();
+    renderAutoApprove();
+    if (on && !me.settings.songs.requireApproval && songsState.queue.some((s) => s.status === 'pending')) {
+      await songAction('approveAll');
+    }
+  });
+
   $('skipBtn').addEventListener('click', () => songAction('skip'));
   $('pauseBtn').addEventListener('click', () => songAction(songsState.paused ? 'resume' : 'pause'));
   $('clearBtn').addEventListener('click', () => confirm('¿Vaciar la cola de canciones?') && songAction('clear'));
@@ -801,7 +827,7 @@
 
   // Si una sección falla, las demás se siguen mostrando.
   function renderAllLists() {
-    for (const fn of [renderFields, renderGiftSounds, renderStickers, renderEvents, renderQuickEvents, renderMediaLibrary]) {
+    for (const fn of [renderFields, renderAutoApprove, renderGiftSounds, renderStickers, renderEvents, renderQuickEvents, renderMediaLibrary]) {
       try {
         fn();
       } catch (err) {

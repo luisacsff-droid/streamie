@@ -208,3 +208,8 @@
   .media-list li .small { display: none; }
   .usage { display: none; }
 }
+
+.auto-approve { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin-bottom: 8px; border-radius: var(--radius-sm); background: var(--panel-2); cursor: pointer; }
+.auto-approve > span:last-child { display: grid; gap: 1px; font-size: 14px; }
+.auto-approve.on { outline: 1px solid var(--accent, #b6ff1f); }
+.auto-approve.locked { cursor: default; opacity: .7; }

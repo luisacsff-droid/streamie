@@ -170,6 +170,10 @@ function control(userId, action, songId) {
       if (idx >= 0) songs.queue[idx].status = 'queued';
       if (!songs.current) return next(userId);
       break;
+    case 'approveAll':
+      for (const s of songs.queue) if (s.status === 'pending') s.status = 'queued';
+      if (!songs.current) return next(userId);
+      break;
     case 'remove':
       if (idx >= 0) songs.queue.splice(idx, 1);
       break;

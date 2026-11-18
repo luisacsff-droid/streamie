@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Panel · Mafy</title>
   <link rel="icon" type="image/png" href="/img/favicon.png">
-  <link rel="stylesheet" href="/styles.css?v=12">
-  <link rel="stylesheet" href="/dashboard.css?v=12">
+  <link rel="stylesheet" href="/styles.css?v=13">
+  <link rel="stylesheet" href="/dashboard.css?v=13">
 </head>
 <body>
   <header class="top">
@@ -160,6 +160,10 @@
             <button id="clearBtn" class="sm ghost danger">Vaciar</button>
           </div>
         </div>
+        <label class="auto-approve" id="autoApproveRow">
+          <span class="switch"><input type="checkbox" id="autoApprove"><span></span></span>
+          <span><b>Aprobar todo</b><span class="small muted" id="autoApproveHint">Las canciones nuevas entran a la cola sin esperar.</span></span>
+        </label>
         <div id="nowPlaying" class="now"></div>
         <ol id="queue" class="queue"></ol>
       </section>
@@ -175,6 +179,6 @@
     <a href="/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>
   </footer>
 
-  <script src="/dashboard.js?v=12"></script>
+  <script src="/dashboard.js?v=13"></script>
 </body>
 </html>
