@@ -13,7 +13,7 @@ const PLANS = {
   free: {
     id: 'free',
     name: 'Free',
-    liveHours: { hours: 5, period: 'week' }, // horas de conexión al LIVE (por semana o por mes)
+    liveHours: { hours: 10, period: 'week' }, // horas de conexión al LIVE (por semana o por mes)
     branding: true, // muestra la marca en los overlays
     tts: {
       premiumVoices: false,
